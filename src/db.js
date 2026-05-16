@@ -81,8 +81,10 @@ async function getActiveSubscriptions() {
 
 async function getTodayMenu() {
   try {
+    // Cast menu_date to date for a consistent comparison regardless of
+    // whether the column is stored as date or varchar.
     const result = await pool.query(
-      `SELECT * FROM menu_items WHERE menu_date = CURRENT_DATE::text ORDER BY category, subcategory`
+      `SELECT * FROM menu_items WHERE menu_date::date = CURRENT_DATE ORDER BY category, subcategory`
     );
     logger.debug(`Fetched ${result.rows.length} menu items for today`);
     return result.rows;
@@ -95,7 +97,7 @@ async function getTodayMenu() {
 async function getMenuByDate(dateText) {
   try {
     const result = await pool.query(
-      `SELECT * FROM menu_items WHERE menu_date = $1 ORDER BY category, subcategory`,
+      `SELECT * FROM menu_items WHERE menu_date::date = $1::date ORDER BY category, subcategory`,
       [dateText]
     );
     logger.debug(`Fetched ${result.rows.length} menu items for date ${dateText}`);
@@ -122,7 +124,7 @@ async function getNextMenu() {
 
     const menuDate = nextRes.rows[0].menu_date;
     const itemsRes = await pool.query(
-      `SELECT * FROM menu_items WHERE menu_date = $1 ORDER BY category, subcategory`,
+      `SELECT * FROM menu_items WHERE menu_date::date = $1::date ORDER BY category, subcategory`,
       [menuDate]
     );
 
@@ -134,10 +136,12 @@ async function getNextMenu() {
   }
 }
 
-async function hasDeliveryLog(guildId, menuDate) {
+// Returns true only when a 'success' row exists for this guild + date.
+// A 'skipped' or 'failed' row does not block redelivery.
+async function hasSuccessfulDelivery(guildId, menuDate) {
   try {
     const result = await pool.query(
-      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND menu_date = $2`,
+      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND menu_date = $2 AND status = 'success'`,
       [guildId, menuDate]
     );
     return result.rows.length > 0;
@@ -152,7 +156,10 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
     await pool.query(
       `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status, error_message)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (guild_id, menu_date) DO NOTHING`,
+       ON CONFLICT (guild_id, menu_date) DO UPDATE
+         SET status = EXCLUDED.status,
+             error_message = EXCLUDED.error_message,
+             delivered_at = NOW()`,
       [guildId, channelId, menuDate, status, errorMessage]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);
@@ -190,7 +197,7 @@ module.exports = {
   getTodayMenu,
   getMenuByDate,
   getNextMenu,
-  hasDeliveryLog,
+  hasSuccessfulDelivery,
   logDelivery,
   getSubscriptionByGuildId,
   closeConnection,

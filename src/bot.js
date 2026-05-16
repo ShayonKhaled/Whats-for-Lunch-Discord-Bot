@@ -15,7 +15,13 @@ const client = new Client({
 });
 
 // Validate environment variables
-const requiredEnvVars = ['DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_ID', 'POSTGRES_DB'];
+const requiredEnvVars = [
+  'DISCORD_BOT_TOKEN',
+  'DISCORD_CLIENT_ID',
+  'POSTGRES_DB',
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.error(`❌ Missing required environment variable: ${envVar}`);

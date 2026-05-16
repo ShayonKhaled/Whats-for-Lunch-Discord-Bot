@@ -26,8 +26,6 @@ module.exports = {
         return interaction.editReply({ content: '⚠️ No menu available for today.' });
       }
 
-      // Put first chunk into the original reply so it stays visible,
-      // then send remaining chunks as follow-ups.
       await interaction.editReply({ content: chunks[0] });
 
       for (let i = 1; i < chunks.length; i++) {

@@ -46,11 +46,10 @@ async function publishMenu(client) {
         const { guild_id: guildId, channel_id: channelId, guild_name: guildName } =
           subscription;
 
-        // Check if already sent today
-        const alreadySent = await db.hasDeliveryLog(guildId, today);
+        // Check if already successfully sent today — skipped rows do not block redelivery
+        const alreadySent = await db.hasSuccessfulDelivery(guildId, today);
         if (alreadySent) {
           logger.info(`⏭️  Skipped ${guildName}: already sent today`);
-          await db.logDelivery(guildId, channelId, today, 'skipped', null);
           skipCount++;
           continue;
         }
@@ -70,8 +69,10 @@ async function publishMenu(client) {
           continue;
         }
 
-        // Check bot permissions
-        if (!channel.permissionsFor(client.user).has('SendMessages')) {
+        // Check bot permissions using guild member object to avoid throws
+        // when the bot has been removed from a guild
+        const me = channel.guild.members.me;
+        if (!me || !channel.permissionsFor(me).has('SendMessages')) {
           logger.warn(`❌ No permission to send messages in ${guildName}/#${channel.name}`);
           await db.logDelivery(
             guildId,
@@ -84,13 +85,12 @@ async function publishMenu(client) {
           continue;
         }
 
-        // Send message chunks with role mention on first chunk
-        const roleId = '1504158073516851221';
+        // Send message chunks; mention the configured role on the first chunk only
+        const roleId = process.env.DISCORD_ROLE_ID;
         let firstChunk = true;
 
         for (const chunk of messageChunks) {
-          const content = firstChunk ? `<@&${roleId}>\n${chunk}` : chunk;
-
+          const content = firstChunk && roleId ? `<@&${roleId}>\n${chunk}` : chunk;
           await channel.send({ content });
           firstChunk = false;
         }
@@ -159,13 +159,16 @@ function start(client) {
   }
 
   // Schedule: 9 AM JST, Monday-Friday
-  // Cron format: minute hour dayOfMonth month dayOfWeek
-  // 0 9 * * 1-5 = 09:00, every day, Monday(1)-Friday(5)
-  scheduledJob = schedule.scheduleJob('0 9 * * 1-5', async () => {
-    await publishMenu(client);
-  });
+  // Timezone is set explicitly so the job fires correctly regardless of
+  // the system TZ environment variable.
+  scheduledJob = schedule.scheduleJob(
+    { rule: '0 9 * * 1-5', tz: 'Asia/Tokyo' },
+    async () => {
+      await publishMenu(client);
+    }
+  );
 
-  logger.info('✅ Menu publisher scheduled');
+  logger.info('✅ Menu publisher scheduled (9:00 AM JST, Mon-Fri)');
 }
 
 function stop() {

@@ -24,8 +24,6 @@ module.exports = {
         return interaction.editReply({ content: '⚠️ No upcoming weekday menu found.' });
       }
 
-      // Put the first chunk in the original reply (so it remains visible),
-      // then follow up with any remaining chunks and a footer.
       await interaction.editReply({ content: chunks[0] });
 
       for (let i = 1; i < chunks.length; i++) {

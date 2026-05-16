@@ -20,11 +20,20 @@ module.exports = {
 
       const chunks = formatMenuMessage(items);
 
-      for (const chunk of chunks) {
-        await interaction.followUp({ content: chunk, ephemeral: true });
+      if (!chunks || chunks.length === 0) {
+        return interaction.editReply({ content: '⚠️ No upcoming weekday menu found.' });
       }
 
-      return interaction.editReply({ content: `📋 **Menu for ${menuDate}** (scroll up to see)` });
+      // Put the first chunk in the original reply (so it remains visible),
+      // then follow up with any remaining chunks and a footer.
+      await interaction.editReply({ content: chunks[0] });
+
+      for (let i = 1; i < chunks.length; i++) {
+        await interaction.followUp({ content: chunks[i], ephemeral: true });
+      }
+
+      await interaction.followUp({ content: `📋 **Menu for ${menuDate}** (scroll up to see)`, ephemeral: true });
+      return;
     } catch (error) {
       logger.error(`Error in nextmenu command: ${error.message}`);
       return interaction.editReply({ content: '❌ Error fetching upcoming menu. Please try again later.' });

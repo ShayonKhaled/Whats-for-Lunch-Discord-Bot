@@ -92,6 +92,48 @@ async function getTodayMenu() {
   }
 }
 
+async function getMenuByDate(dateText) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM menu_items WHERE menu_date = $1 ORDER BY category, subcategory`,
+      [dateText]
+    );
+    logger.debug(`Fetched ${result.rows.length} menu items for date ${dateText}`);
+    return result.rows;
+  } catch (err) {
+    logger.error(`Error fetching menu by date: ${err.message}`);
+    throw err;
+  }
+}
+
+async function getNextMenu() {
+  try {
+    const nextRes = await pool.query(
+      `SELECT menu_date FROM menu_items
+       WHERE (menu_date::date > CURRENT_DATE)
+         AND EXTRACT(ISODOW FROM menu_date::date) BETWEEN 1 AND 5
+       ORDER BY menu_date::date ASC
+       LIMIT 1`
+    );
+
+    if (!nextRes.rows || nextRes.rows.length === 0) {
+      return { menuDate: null, items: [] };
+    }
+
+    const menuDate = nextRes.rows[0].menu_date;
+    const itemsRes = await pool.query(
+      `SELECT * FROM menu_items WHERE menu_date = $1 ORDER BY category, subcategory`,
+      [menuDate]
+    );
+
+    logger.debug(`Fetched ${itemsRes.rows.length} menu items for next date ${menuDate}`);
+    return { menuDate, items: itemsRes.rows };
+  } catch (err) {
+    logger.error(`Error fetching next menu: ${err.message}`);
+    throw err;
+  }
+}
+
 async function hasDeliveryLog(guildId, menuDate) {
   try {
     const result = await pool.query(
@@ -146,6 +188,8 @@ module.exports = {
   removeSubscription,
   getActiveSubscriptions,
   getTodayMenu,
+  getMenuByDate,
+  getNextMenu,
   hasDeliveryLog,
   logDelivery,
   getSubscriptionByGuildId,

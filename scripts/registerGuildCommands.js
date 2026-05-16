@@ -76,6 +76,14 @@ const path = require('path');
 const { REST, Routes } = require('discord.js');
 
 // Simple arg parsing
+#!/usr/bin/env node
+require('dotenv').config();
+
+const fs = require('fs');
+const path = require('path');
+const { REST, Routes } = require('discord.js');
+
+// Simple arg parsing
 const args = process.argv.slice(2);
 let guildId = null;
 let clientId = process.env.DISCORD_CLIENT_ID;
@@ -138,3 +146,4 @@ const rest = new REST({ version: '10' }).setToken(token);
     process.exit(1);
   }
 })();
+const args = process.argv.slice(2);

@@ -34,17 +34,17 @@ async function initConnection() {
   return pool;
 }
 
-async function addSubscription(guildId, guildName, channelId, channelName) {
+async function addSubscription(guildId, guildName, channelId, channelName, roleId) {
   try {
     const result = await pool.query(
-      `INSERT INTO guild_subscriptions (guild_id, guild_name, channel_id, channel_name)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO guild_subscriptions (guild_id, guild_name, channel_id, channel_name, role_id)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (guild_id) DO UPDATE
-       SET channel_id = $3, channel_name = $4, updated_at = NOW()
+       SET channel_id = $3, channel_name = $4, role_id = $5, updated_at = NOW()
        RETURNING *`,
-      [guildId, guildName, channelId, channelName]
+      [guildId, guildName, channelId, channelName, roleId]
     );
-    logger.info(`✅ Added/updated subscription: guild=${guildId}, channel=${channelId}`);
+    logger.info(`✅ Added/updated subscription: guild=${guildId}, channel=${channelId}, role=${roleId}`);
     return result.rows[0];
   } catch (err) {
     logger.error(`Error adding subscription: ${err.message}`);

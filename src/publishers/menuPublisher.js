@@ -85,8 +85,8 @@ async function publishMenu(client) {
           continue;
         }
 
-        // Send message chunks; mention the configured role on the first chunk only
-        const roleId = process.env.DISCORD_ROLE_ID;
+        // Send message chunks; mention the guild's notify-menu role on the first chunk only
+        const roleId = subscription.role_id;
         let firstChunk = true;
 
         for (const chunk of messageChunks) {

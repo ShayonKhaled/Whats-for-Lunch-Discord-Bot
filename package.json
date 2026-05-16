@@ -1,0 +1,29 @@
+{
+  "name": "campus-lunch-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for distributing university lunch menus to multiple Discord servers",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "NODE_ENV=development node src/bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "menu",
+    "automation"
+  ],
+  "author": "Campus Lunch Pipeline",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "node-schedule": "^2.1.1",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": "18.0.0"
+  }
+}

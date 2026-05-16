@@ -9,7 +9,7 @@ function formatMenuMessage(items) {
 
   const firstItem = items[0];
   const menuDate = firstItem.menu_date;
-  const dayName = firstItem.day_name;
+  const dayName = (firstItem.day_name || '').trim();
 
   // Group items by category and subcategory
   const grouped = {};

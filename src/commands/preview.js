@@ -34,7 +34,6 @@ module.exports = {
         await interaction.followUp({ content: chunks[i], ephemeral: true });
       }
 
-      await interaction.followUp({ content: '📋 **Menu Preview** (scroll up to see)', ephemeral: true });
       return;
     } catch (error) {
       logger.error(`Error in preview command: ${error.message}`);

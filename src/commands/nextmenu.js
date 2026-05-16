@@ -32,7 +32,6 @@ module.exports = {
         await interaction.followUp({ content: chunks[i], ephemeral: true });
       }
 
-      await interaction.followUp({ content: `📋 **Menu for ${menuDate}** (scroll up to see)`, ephemeral: true });
       return;
     } catch (error) {
       logger.error(`Error in nextmenu command: ${error.message}`);

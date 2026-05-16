@@ -28,7 +28,8 @@ module.exports = {
         });
       }
 
-      const role = interaction.guild.roles.cache.get(subscription.role_id);
+
+      const role = await interaction.guild.roles.fetch(subscription.role_id).catch(() => null);
 
       if (!role) {
         return interaction.editReply({

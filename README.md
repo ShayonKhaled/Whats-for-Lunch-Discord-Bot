@@ -4,14 +4,14 @@ A Discord bot that broadcasts the daily Uzumasa Campus cafeteria menu to subscri
 
 ## Features
 
-- ✅ **Per-guild subscriptions** — each server controls its own menu channel
-- ✅ **Auto-created notification role** — a `notify-menu` role is created automatically on subscribe
-- ✅ **Self-serve notifications** — members opt in/out with `/notify`, no admin needed
-- ✅ **Slash commands** — `/subscribe`, `/unsubscribe`, `/notify`, `/status`, `/preview`, `/nextmenu`
-- ✅ **Automatic daily delivery** — 9:00 AM JST, Monday–Friday
-- ✅ **Duplicate prevention** — tracks sent menus to avoid re-posts
-- ✅ **Rich formatting** — emojis, nutrition info, allergen warnings
-- ✅ **Error resilience** — logs delivery failures, alerts admin, continues on errors
+-  **Per-guild subscriptions** - each server controls its own menu channel
+-  **Auto-created notification role** - a `notify-menu` role is created automatically on subscribe
+-  **Self-serve notifications** - members opt in/out with `/notify`, no admin needed
+-  **Slash commands** — `/subscribe`, `/unsubscribe`, `/notify`, `/status`, `/preview`, `/nextmenu`
+-  **Automatic daily delivery** - 9:00 AM JST, Monday–Friday
+-  **Duplicate prevention** - tracks sent menus to avoid re-posts
+-  **Rich formatting** - emojis, nutrition info, allergen warnings
+-  **Error resilience** - logs delivery failures, alerts admin, continues on errors
 
 ---
 

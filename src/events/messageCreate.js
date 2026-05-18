@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 
 const OWNER_ID = '722771046125797428';
 const UPLOAD_CHANNEL_NAME = 'halal-menu-upload';
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 module.exports = {
   name: 'messageCreate',
@@ -29,20 +30,22 @@ module.exports = {
 
     const statusMsg = await message.reply('🔍 Reading the poster...');
 
+
     try {
       // Download the image and convert to base64
+
       const imageResponse = await fetch(attachment.url);
       const imageBuffer = await imageResponse.arrayBuffer();
-      const sharp = require('sharp');
 
-      // After: const imageBuffer = await imageResponse.arrayBuffer();
-      const compressedBuffer = await sharp(Buffer.from(imageBuffer))
-        .resize({ width: 1800, withoutEnlargement: true })
-        .jpeg({ quality: 85 })
-        .toBuffer();
+      const image = await loadImage(Buffer.from(imageBuffer));
+      const scale = Math.min(1, 1800 / image.width);
+      const canvas = createCanvas(Math.floor(image.width * scale), Math.floor(image.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const compressedBuffer = canvas.toBuffer('image/jpeg', { quality: 0.85 });
 
       const base64Image = compressedBuffer.toString('base64');
-      const mediaType = 'image/jpeg'; // always jpeg after compression
+      const mediaType = 'image/jpeg';
       // Send to Claude vision for extraction
       const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',

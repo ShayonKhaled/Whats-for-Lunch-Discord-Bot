@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+
 const db = require('../db');
 const logger = require('../utils/logger');
 

@@ -79,8 +79,9 @@ Each object must have these fields:
 - "dish_name": string
 - "day_name": "Tuesday" or "Thursday"
 - "menu_date": "YYYY-MM-DD" (infer from the month/year on the poster and the day names; if the poster shows week numbers, map them to actual calendar dates)
-
+- If a dish name is obscured, crossed out, covered, or unreadable, skip that entry entirely — do not include it in the output.
 Today's date for reference: ${new Date().toISOString().split('T')[0]}
+- Remove the word "Halal" from the beginning of dish names if present (e.g. "Halal Chicken Curry" → "Chicken Curry").
 
 Example output:
 [

@@ -23,7 +23,7 @@ function formatMenuMessage(items) {
 
   // Define category order and emojis
   const order = [
-    { key: 'Halal|||Halal', emoji: '🟢' },
+    { key: 'Halal|||Halal', emoji: '✅' },
     { key: 'Set Meals|||Campus Lunch (1)', emoji: '🥘' },
     { key: 'Set Meals|||Campus Lunch (2)', emoji: '🍲' },
     { key: 'A La Carte|||A La Carte', emoji: '🍛' },

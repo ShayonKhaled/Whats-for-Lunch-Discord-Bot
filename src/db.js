@@ -52,6 +52,24 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
   }
 }
 
+async function addHalalMenuItem({ campus, week_of, day_name, menu_date, dish_name }) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO menu_items (campus, week_of, day_name, menu_date, category, subcategory, dish_name)
+       VALUES ($1, $2, $3, $4, 'Halal', 'Halal', $5)
+       ON CONFLICT (campus, menu_date, dish_name, subcategory) DO NOTHING
+       RETURNING *`,
+      [campus, week_of, day_name, menu_date, dish_name]
+    );
+    logger.debug(`Halal insert: ${dish_name} on ${menu_date} — ${result.rows.length ? 'inserted' : 'already exists'}`);
+    return result.rows[0] || null;
+  } catch (err) {
+    logger.error(`Error inserting halal menu item: ${err.message}`);
+    throw err;
+  }
+}
+
+
 async function removeSubscription(guildId) {
   try {
     const result = await pool.query(
@@ -201,4 +219,5 @@ module.exports = {
   logDelivery,
   getSubscriptionByGuildId,
   closeConnection,
+  addHalalMenuItem
 };

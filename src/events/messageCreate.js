@@ -33,9 +33,16 @@ module.exports = {
       // Download the image and convert to base64
       const imageResponse = await fetch(attachment.url);
       const imageBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(imageBuffer).toString('base64');
-      const mediaType = attachment.contentType.split(';')[0]; // e.g. "image/jpeg"
+      const sharp = require('sharp');
 
+      // After: const imageBuffer = await imageResponse.arrayBuffer();
+      const compressedBuffer = await sharp(Buffer.from(imageBuffer))
+        .resize({ width: 1800, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+
+      const base64Image = compressedBuffer.toString('base64');
+      const mediaType = 'image/jpeg'; // always jpeg after compression
       // Send to Claude vision for extraction
       const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -45,7 +52,7 @@ module.exports = {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4-5',
+          model: 'claude-sonnet-4-6',
           max_tokens: 1024,
           messages: [
             {

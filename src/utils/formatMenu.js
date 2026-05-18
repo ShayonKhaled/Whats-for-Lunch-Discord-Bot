@@ -37,8 +37,8 @@ function formatMenuMessage(items) {
   ];
 
   const categoryEmojis = {
-    'Halal': '🟢',
     'Set Meals': '🍱',
+    'Halal': '🟢',
     'A La Carte': '🍛',
     'Noodles': '🍜',
     'Sides': '🥗',

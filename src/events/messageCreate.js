@@ -82,7 +82,7 @@ Each object must have these fields:
 - If a dish name is obscured, crossed out, covered, or unreadable, skip that entry entirely — do not include it in the output.
 Today's date for reference: ${new Date().toISOString().split('T')[0]}
 - Remove the word "Halal" from the beginning of dish names if present, and ensure the first letter is capitalized.
-
+- IMPORTANT: Ignore the date range shown in the title/header. Derive each item's date solely from the 販売日 (sale date) column in the table rows themselves.
 Example output:
 [
   { "dish_name": "Chicken Biryani", "day_name": "Tuesday", "menu_date": "2026-05-20" },

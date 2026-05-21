@@ -1,12 +1,12 @@
+# What's for Lunch — Discord Bot
+
 ![Status](https://img.shields.io/badge/status-stable-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-
-
-# What's for Lunch — Discord Bot
 
 A Discord bot that broadcasts the daily Uzumasa Campus cafeteria menu to subscribed servers every weekday at 9:00 AM JST. Reads from the same PostgreSQL database populated by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) and delivers it to any number of Discord servers independently.
 
 ---
+
 
 ## Infrastructure
 

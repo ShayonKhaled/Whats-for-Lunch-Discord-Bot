@@ -186,9 +186,9 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
   try {
     await pool.query(
       `UPDATE bot_delivery_log
-       SET status = $4, error_message = $5, delivered_at = NOW()
-       WHERE guild_id = $1::bigint AND menu_date = $3::text`,
-      [guildId, channelId, menuDate, status, errorMessage]
+       SET status = $3, error_message = $4, delivered_at = NOW()
+       WHERE guild_id = $1::bigint AND menu_date = $2::text`,
+      [guildId, menuDate, status, errorMessage]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);
   } catch (err) {

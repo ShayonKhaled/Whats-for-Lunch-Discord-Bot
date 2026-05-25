@@ -46,14 +46,13 @@ async function publishMenu(client) {
         const { guild_id: guildId, channel_id: channelId, guild_name: guildName } =
           subscription;
 
-        // Check if already successfully sent today — skipped rows do not block redelivery
-        const alreadySent = await db.hasSuccessfulDelivery(guildId, today);
-        if (alreadySent) {
+        // Atomically claim this delivery slot — only one process/run can win
+        const claimed = await db.claimDelivery(guildId, channelId, today);
+        if (!claimed) {
           logger.info(`⏭️  Skipped ${guildName}: already sent today`);
           skipCount++;
           continue;
         }
-
         // Get the Discord channel
         const channel = await client.channels.fetch(channelId).catch(() => null);
         if (!channel) {

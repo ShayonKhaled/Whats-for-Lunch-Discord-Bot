@@ -154,17 +154,19 @@ async function getNextMenu() {
   }
 }
 
-// Returns true only when a 'success' row exists for this guild + date.
-// A 'skipped' or 'failed' row does not block redelivery.
-async function hasSuccessfulDelivery(guildId, menuDate) {
+
+async function claimDelivery(guildId, channelId, menuDate) {
   try {
     const result = await pool.query(
-      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND menu_date = $2 AND status = 'success'`,
-      [guildId, menuDate]
+      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status)
+       VALUES ($1, $2, $3, 'pending')
+       ON CONFLICT (guild_id, menu_date) DO NOTHING
+       RETURNING *`,
+      [guildId, channelId, menuDate]
     );
     return result.rows.length > 0;
   } catch (err) {
-    logger.error(`Error checking delivery log: ${err.message}`);
+    logger.error(`Error claiming delivery: ${err.message}`);
     throw err;
   }
 }
@@ -172,12 +174,9 @@ async function hasSuccessfulDelivery(guildId, menuDate) {
 async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
   try {
     await pool.query(
-      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status, error_message)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (guild_id, menu_date) DO UPDATE
-         SET status = EXCLUDED.status,
-             error_message = EXCLUDED.error_message,
-             delivered_at = NOW()`,
+      `UPDATE bot_delivery_log
+       SET status = $4, error_message = $5, delivered_at = NOW()
+       WHERE guild_id = $1 AND menu_date = $3`,
       [guildId, channelId, menuDate, status, errorMessage]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);
@@ -186,6 +185,7 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
     throw err;
   }
 }
+
 
 async function getSubscriptionByGuildId(guildId) {
   try {
@@ -215,9 +215,8 @@ module.exports = {
   getTodayMenu,
   getMenuByDate,
   getNextMenu,
-  hasSuccessfulDelivery,
+  claimDelivery,      
   logDelivery,
   getSubscriptionByGuildId,
   closeConnection,
-  addHalalMenuItem
 };

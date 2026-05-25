@@ -170,7 +170,7 @@ async function claimDelivery(guildId, channelId, menuDate) {
   try {
     const result = await pool.query(
       `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status)
-       VALUES ($1, $2, $3, 'pending')
+       VALUES ($1::text, $2::text, $3::text, 'pending')
        ON CONFLICT (guild_id, menu_date) DO NOTHING
        RETURNING *`,
       [guildId, channelId, menuDate]

@@ -44,6 +44,16 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
        RETURNING *`,
       [guildId, guildName, channelId, channelName, roleId]
     );
+
+    // If channel changed, clear any pending delivery for today so the new channel gets the menu
+    await pool.query(
+      `DELETE FROM bot_delivery_log
+       WHERE guild_id = $1
+       AND menu_date = CURRENT_DATE
+       AND status = 'pending'`,
+      [guildId]
+    );
+
     logger.info(`✅ Added/updated subscription: guild=${guildId}, channel=${channelId}, role=${roleId}`);
     return result.rows[0];
   } catch (err) {
@@ -51,6 +61,7 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
     throw err;
   }
 }
+
 
 async function addHalalMenuItem({ campus, week_of, day_name, menu_date, dish_name }) {
   try {

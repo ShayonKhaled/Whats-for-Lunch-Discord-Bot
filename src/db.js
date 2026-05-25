@@ -170,7 +170,7 @@ async function claimDelivery(guildId, channelId, menuDate) {
   try {
     const result = await pool.query(
       `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status)
-       VALUES ($1::text, $2::text, $3::text, 'pending')
+       VALUES ($1::bigint, $2::bigint, $3::text, 'pending')
        ON CONFLICT (guild_id, menu_date) DO NOTHING
        RETURNING *`,
       [guildId, channelId, menuDate]
@@ -187,7 +187,7 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
     await pool.query(
       `UPDATE bot_delivery_log
        SET status = $4, error_message = $5, delivered_at = NOW()
-       WHERE guild_id = $1 AND menu_date = $3`,
+       WHERE guild_id = $1::bigint AND menu_date = $3::text`,
       [guildId, channelId, menuDate, status, errorMessage]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);

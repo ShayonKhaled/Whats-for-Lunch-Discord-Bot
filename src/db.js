@@ -49,7 +49,7 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
     await pool.query(
       `DELETE FROM bot_delivery_log
        WHERE guild_id = $1
-       AND menu_date = CURRENT_DATE
+       AND menu_date::date = CURRENT_DATE
        AND status = 'pending'`,
       [guildId]
     );
@@ -170,7 +170,7 @@ async function claimDelivery(guildId, channelId, menuDate) {
   try {
     const result = await pool.query(
       `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status)
-       VALUES ($1::bigint, $2::bigint, $3::text, 'pending')
+       VALUES ($1, $2, $3::text, 'pending')
        ON CONFLICT (guild_id, menu_date) DO NOTHING
        RETURNING *`,
       [guildId, channelId, menuDate]
@@ -186,8 +186,8 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
   try {
     await pool.query(
       `UPDATE bot_delivery_log
-       SET status = $2::text, error_message = $3::text, delivered_at = NOW()
-       WHERE guild_id = $1::bigint AND menu_date = $4::text`,
+       SET status = $2, error_message = $3, delivered_at = NOW()
+       WHERE guild_id = $1 AND menu_date = $4::text`,
       [guildId, status, errorMessage, menuDate]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);

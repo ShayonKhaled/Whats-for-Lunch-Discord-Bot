@@ -44,6 +44,16 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
        RETURNING *`,
       [guildId, guildName, channelId, channelName, roleId]
     );
+
+    // If channel changed, clear any pending delivery for today so the new channel gets the menu
+    await pool.query(
+      `DELETE FROM bot_delivery_log
+       WHERE guild_id = $1
+       AND menu_date = CURRENT_DATE
+       AND status = 'pending'`,
+      [guildId]
+    );
+
     logger.info(`✅ Added/updated subscription: guild=${guildId}, channel=${channelId}, role=${roleId}`);
     return result.rows[0];
   } catch (err) {
@@ -51,6 +61,7 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
     throw err;
   }
 }
+
 
 async function addHalalMenuItem({ campus, week_of, day_name, menu_date, dish_name }) {
   try {
@@ -154,17 +165,19 @@ async function getNextMenu() {
   }
 }
 
-// Returns true only when a 'success' row exists for this guild + date.
-// A 'skipped' or 'failed' row does not block redelivery.
-async function hasSuccessfulDelivery(guildId, menuDate) {
+
+async function claimDelivery(guildId, channelId, menuDate) {
   try {
     const result = await pool.query(
-      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND menu_date = $2 AND status = 'success'`,
-      [guildId, menuDate]
+      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status)
+       VALUES ($1::bigint, $2::bigint, $3::text, 'pending')
+       ON CONFLICT (guild_id, menu_date) DO NOTHING
+       RETURNING *`,
+      [guildId, channelId, menuDate]
     );
     return result.rows.length > 0;
   } catch (err) {
-    logger.error(`Error checking delivery log: ${err.message}`);
+    logger.error(`Error claiming delivery: ${err.message}`);
     throw err;
   }
 }
@@ -172,13 +185,10 @@ async function hasSuccessfulDelivery(guildId, menuDate) {
 async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
   try {
     await pool.query(
-      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status, error_message)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (guild_id, menu_date) DO UPDATE
-         SET status = EXCLUDED.status,
-             error_message = EXCLUDED.error_message,
-             delivered_at = NOW()`,
-      [guildId, channelId, menuDate, status, errorMessage]
+      `UPDATE bot_delivery_log
+       SET status = $2::text, error_message = $3::text, delivered_at = NOW()
+       WHERE guild_id = $1::bigint AND menu_date = $4::text`,
+      [guildId, status, errorMessage, menuDate]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);
   } catch (err) {
@@ -186,6 +196,7 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
     throw err;
   }
 }
+
 
 async function getSubscriptionByGuildId(guildId) {
   try {
@@ -215,9 +226,8 @@ module.exports = {
   getTodayMenu,
   getMenuByDate,
   getNextMenu,
-  hasSuccessfulDelivery,
+  claimDelivery,      
   logDelivery,
   getSubscriptionByGuildId,
   closeConnection,
-  addHalalMenuItem
 };

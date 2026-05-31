@@ -61,9 +61,7 @@ function formatMenuMessage(items) {
     'Sides': '🥗',
   };
 
-  let message = `# Uzumasa Campus — ${dayName}, ${menuDate}\n\n`;
-  let lastCategory = null;
-
+  const sections = new Map();
   for (const { key, emoji } of order) {
     if (!grouped[key]) {
       continue;
@@ -73,51 +71,85 @@ function formatMenuMessage(items) {
     const categoryName = category.trim();
     const subcategoryName = subcategory.trim();
     const displayCategoryName = subcategoryName === 'Curry Set' ? 'Curry Set' : categoryName;
-    const dishes = grouped[key];
+
+    if (!sections.has(displayCategoryName)) {
+      sections.set(displayCategoryName, {
+        emoji: categoryEmojis[displayCategoryName] || emoji || '🍴',
+        items: [],
+      });
+    }
+
+    sections.get(displayCategoryName).items.push({
+      key,
+      emoji,
+      categoryName,
+      subcategoryName,
+      dishes: grouped[key],
+    });
+  }
+
+  let message = `# Uzumasa Campus — ${dayName}, ${menuDate}\n\n`;
+  let lastCategory = null;
+
+  for (const [displayCategoryName, section] of sections) {
+    const sectionPrices = new Set(
+      section.items
+        .map((item) => PRICES[item.subcategoryName])
+        .filter((price) => typeof price === 'number')
+    );
+    const sharedSectionPrice = sectionPrices.size === 1 ? [...sectionPrices][0] : null;
+    const sectionPriceStr = sharedSectionPrice
+      ? `  ·  ¥${sharedSectionPrice}${SET_MEAL_SUBCATEGORIES.has(section.items[0].subcategoryName) ? ' (+ 1 side/salad)' : ''}`
+      : '';
 
     // Category header
     if (displayCategoryName !== lastCategory) {
       if (lastCategory !== null) {
         message += '\n';
       }
-      const catEmoji = categoryEmojis[displayCategoryName] || '🍴';
-      message += `## ${catEmoji} ${displayCategoryName}\n`;
+      message += `## ${section.emoji} ${displayCategoryName}${sectionPriceStr}\n`;
       lastCategory = displayCategoryName;
     }
 
-    // Subcategory label includes price when every item in the group shares it.
-    const price = PRICES[subcategoryName];
-    const isSetMeal = SET_MEAL_SUBCATEGORIES.has(subcategoryName);
-    const priceStr = price
-      ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}`
-      : '';
-    if (subcategoryName.toLowerCase() !== categoryName.toLowerCase()) {
-      message += `**— ${subcategoryName}${priceStr} —**\n`;
-    }
+    for (const item of section.items) {
+      const showSubcategoryName =
+        displayCategoryName !== 'Curry Set' && item.subcategoryName.toLowerCase() !== displayCategoryName.toLowerCase();
+      const subcategoryPriceStr = sharedSectionPrice
+        ? ''
+        : (() => {
+            const price = PRICES[item.subcategoryName];
+            const isSetMeal = SET_MEAL_SUBCATEGORIES.has(item.subcategoryName);
+            return price ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}` : '';
+          })();
 
-    for (const dish of dishes) {
-      message += `> ${emoji} **${dish.dish_name}**\n`;
-
-      const nutrition = [];
-      if (dish.calories) {
-        nutrition.push(`${dish.calories} kcal`);
-      }
-      if (dish.protein) {
-        nutrition.push(`Protein ${dish.protein}g`);
-      }
-      if (dish.fat) {
-        nutrition.push(`Fat ${dish.fat}g`);
+      if (showSubcategoryName) {
+        message += `**— ${item.subcategoryName}${subcategoryPriceStr} —**\n`;
       }
 
-      if (nutrition.length > 0) {
-        message += `> 📊 ${nutrition.join('  ·  ')}\n`;
-      }
+      for (const dish of item.dishes) {
+        message += `> ${item.emoji} **${dish.dish_name}**\n`;
 
-      if (dish.allergens) {
-        message += `> ⚠️ *${dish.allergens}*\n`;
-      }
+        const nutrition = [];
+        if (dish.calories) {
+          nutrition.push(`${dish.calories} kcal`);
+        }
+        if (dish.protein) {
+          nutrition.push(`Protein ${dish.protein}g`);
+        }
+        if (dish.fat) {
+          nutrition.push(`Fat ${dish.fat}g`);
+        }
 
-      message += '\n';
+        if (nutrition.length > 0) {
+          message += `> 📊 ${nutrition.join('  ·  ')}\n`;
+        }
+
+        if (dish.allergens) {
+          message += `> ⚠️ *${dish.allergens}*\n`;
+        }
+
+        message += '\n';
+      }
     }
   }
 

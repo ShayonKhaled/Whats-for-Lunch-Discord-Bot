@@ -81,23 +81,18 @@ function formatMenuMessage(items) {
       lastCategory = category;
     }
 
-    // Subcategory label (skip if same as category)
-    if (subcategory.toLowerCase() !== category.toLowerCase()) {
-      const price = PRICES[subcategory];
-      const isSetMeal = SET_MEAL_SUBCATEGORIES.has(subcategory);
-      const priceStr = price
-        ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}`
-        : '';
+    // Subcategory label includes price when every item in the group shares it.
+    const price = PRICES[subcategory];
+    const isSetMeal = SET_MEAL_SUBCATEGORIES.has(subcategory);
+    const priceStr = price
+      ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}`
+      : '';
+    if (subcategory.toLowerCase() !== category.toLowerCase() || priceStr) {
       message += `**— ${subcategory}${priceStr} —**\n`;
     }
 
     for (const dish of dishes) {
-      // For A La Carte where subcategory === category, show price on the dish line
-      const showPriceOnDish = subcategory.toLowerCase() === category.toLowerCase();
-      const price = showPriceOnDish ? PRICES[subcategory] : null;
-      const priceStr = price ? `  ·  ¥${price}` : '';
-
-      message += `> ${emoji} **${dish.dish_name}**${priceStr}\n`;
+      message += `> ${emoji} **${dish.dish_name}**\n`;
 
       const nutrition = [];
       if (dish.calories) {

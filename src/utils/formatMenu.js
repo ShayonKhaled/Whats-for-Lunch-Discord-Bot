@@ -2,6 +2,24 @@
  * Formats an array of menu items into Discord message chunks
  * Reuses logic from the n8n workflow-2 formatting node
  */
+
+// Hardcoded prices by subcategory (in yen)
+const PRICES = {
+  'Campus Lunch (1)': 330,
+  'Campus Lunch (2)': 330,
+  'A La Carte':       330,
+  'Curry Set':        330,
+  'Ramen':            250,
+  'Udon and Soba':    200,
+  'Side Dish A':       70,
+  'Side Dish B':       70,
+  'Side Dish C':       70,
+  'Salad':             70,
+};
+
+// Subcategories where the price includes one free side dish or salad
+const SET_MEAL_SUBCATEGORIES = new Set(['Campus Lunch (1)', 'Campus Lunch (2)']);
+
 function formatMenuMessage(items) {
   if (!items || items.length === 0) {
     return ['⚠️ No menu found for today.'];
@@ -25,7 +43,6 @@ function formatMenuMessage(items) {
   const order = [
     { key: 'Set Meals|||Campus Lunch (1)', emoji: '🥘' },
     { key: 'Set Meals|||Campus Lunch (2)', emoji: '🍲' },
-    { key: 'Halal|||Halal', emoji: '✅' },
     { key: 'A La Carte|||A La Carte', emoji: '🍛' },
     { key: 'A La Carte|||Curry Set', emoji: '🍛' },
     { key: 'Noodles|||Ramen', emoji: '🍜' },
@@ -38,7 +55,6 @@ function formatMenuMessage(items) {
 
   const categoryEmojis = {
     'Set Meals': '🍱',
-    'Halal': '🟢',
     'A La Carte': '🍛',
     'Noodles': '🍜',
     'Sides': '🥗',
@@ -67,11 +83,21 @@ function formatMenuMessage(items) {
 
     // Subcategory label (skip if same as category)
     if (subcategory.toLowerCase() !== category.toLowerCase()) {
-      message += `**— ${subcategory} —**\n`;
+      const price = PRICES[subcategory];
+      const isSetMeal = SET_MEAL_SUBCATEGORIES.has(subcategory);
+      const priceStr = price
+        ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}`
+        : '';
+      message += `**— ${subcategory}${priceStr} —**\n`;
     }
 
     for (const dish of dishes) {
-      message += `> ${emoji} **${dish.dish_name}**\n`;
+      // For A La Carte where subcategory === category, show price on the dish line
+      const showPriceOnDish = subcategory.toLowerCase() === category.toLowerCase();
+      const price = showPriceOnDish ? PRICES[subcategory] : null;
+      const priceStr = price ? `  ·  ¥${price}` : '';
+
+      message += `> ${emoji} **${dish.dish_name}**${priceStr}\n`;
 
       const nutrition = [];
       if (dish.calories) {
@@ -97,7 +123,8 @@ function formatMenuMessage(items) {
   }
 
   message += '\n━━━━━━━━━━━━━━━━━━━━━━\n';
-  message += '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**';
+  message += '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM** ';
+  message += '\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*';
 
   // Split into chunks under 2000 chars (Discord limit)
   const chunks = [];

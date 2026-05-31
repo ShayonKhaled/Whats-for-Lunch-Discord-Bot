@@ -1,6 +1,6 @@
 {
   "name": "campus-lunch-discord-bot",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Discord bot for distributing university lunch menus to multiple Discord servers",
   "main": "src/bot.js",
   "scripts": {

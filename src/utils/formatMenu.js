@@ -56,6 +56,7 @@ function formatMenuMessage(items) {
   const categoryEmojis = {
     'Set Meals': '🍱',
     'A La Carte': '🍛',
+    'Curry Set': '🍛',
     'Noodles': '🍜',
     'Sides': '🥗',
   };
@@ -69,26 +70,29 @@ function formatMenuMessage(items) {
     }
 
     const [category, subcategory] = key.split('|||');
+    const categoryName = category.trim();
+    const subcategoryName = subcategory.trim();
+    const displayCategoryName = subcategoryName === 'Curry Set' ? 'Curry Set' : categoryName;
     const dishes = grouped[key];
 
     // Category header
-    if (category !== lastCategory) {
+    if (displayCategoryName !== lastCategory) {
       if (lastCategory !== null) {
         message += '\n';
       }
-      const catEmoji = categoryEmojis[category] || '🍴';
-      message += `## ${catEmoji} ${category}\n`;
-      lastCategory = category;
+      const catEmoji = categoryEmojis[displayCategoryName] || '🍴';
+      message += `## ${catEmoji} ${displayCategoryName}\n`;
+      lastCategory = displayCategoryName;
     }
 
     // Subcategory label includes price when every item in the group shares it.
-    const price = PRICES[subcategory];
-    const isSetMeal = SET_MEAL_SUBCATEGORIES.has(subcategory);
+    const price = PRICES[subcategoryName];
+    const isSetMeal = SET_MEAL_SUBCATEGORIES.has(subcategoryName);
     const priceStr = price
       ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}`
       : '';
-    if (subcategory.toLowerCase() !== category.toLowerCase() || priceStr) {
-      message += `**— ${subcategory}${priceStr} —**\n`;
+    if (subcategoryName.toLowerCase() !== categoryName.toLowerCase()) {
+      message += `**— ${subcategoryName}${priceStr} —**\n`;
     }
 
     for (const dish of dishes) {

@@ -43,6 +43,7 @@ function formatMenuMessage(items) {
   const order = [
     { key: 'Set Meals|||Campus Lunch (1)', emoji: '🥘' },
     { key: 'Set Meals|||Campus Lunch (2)', emoji: '🍲' },
+    { key: 'Halal|||Halal', emoji: '✅' },
     { key: 'A La Carte|||A La Carte', emoji: '🍛' },
     { key: 'A La Carte|||Curry Set', emoji: '🍛' },
     { key: 'Noodles|||Ramen', emoji: '🍜' },
@@ -55,6 +56,7 @@ function formatMenuMessage(items) {
 
   const categoryEmojis = {
     'Set Meals': '🍱',
+    'Halal': '🟢',
     'A La Carte': '🍛',
     'Curry Set': '🍛',
     'Noodles': '🍜',
@@ -113,7 +115,7 @@ function formatMenuMessage(items) {
 
     for (const item of section.items) {
       const showSubcategoryName =
-        displayCategoryName !== 'Curry Set' && item.subcategoryName.toLowerCase() !== displayCategoryName.toLowerCase();
+        displayCategoryName !== 'Curry Set' && displayCategoryName !== 'Halal' && item.subcategoryName.toLowerCase() !== displayCategoryName.toLowerCase();
       const subcategoryPriceStr = sharedSectionPrice
         ? ''
         : (() => {

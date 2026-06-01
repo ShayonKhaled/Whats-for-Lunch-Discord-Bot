@@ -7,6 +7,7 @@
 const PRICES = {
   'Campus Lunch (1)': 330,
   'Campus Lunch (2)': 330,
+  'Halal':            400,
   'A La Carte':       330,
   'Curry Set':        330,
   'Ramen':            250,

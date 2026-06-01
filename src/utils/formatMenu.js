@@ -158,7 +158,7 @@ function formatMenuMessage(items) {
 
   message += '\n━━━━━━━━━━━━━━━━━━━━━━\n';
   message += '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM** ';
-  message += '\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*';
+  message += '\n\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*';
 
   // Split into chunks under 2000 chars (Discord limit)
   const chunks = [];

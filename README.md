@@ -15,7 +15,7 @@ A Discord bot that broadcasts the daily Uzumasa Campus cafeteria menu to subscri
 - No cloud hosting required — fully self-hosted
 
 **External Services**
-- PostgreSQL — shared `campus_lunch` database populated by the pipeline; read-only from the bot's perspective
+- PostgreSQL — shared `menu_db` database populated by the pipeline; read-only from the bot's perspective
 - Discord Bot API — slash commands and message delivery
 - Anthropic Claude API (`claude-sonnet-4-6`) — vision extraction for halal menu photo uploads
 

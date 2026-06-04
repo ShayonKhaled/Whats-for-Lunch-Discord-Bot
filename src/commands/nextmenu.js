@@ -38,10 +38,14 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
       );
 
-      const lastIndex = chunks.length - 1;
       await interaction.editReply({
-        content: chunks[0],
+        content: 'Tap below to rate the menu',
         components: [rateButton],
+      });
+
+      await interaction.followUp({
+        content: chunks[0],
+        ephemeral: true,
       });
 
       for (let i = 1; i < chunks.length; i++) {

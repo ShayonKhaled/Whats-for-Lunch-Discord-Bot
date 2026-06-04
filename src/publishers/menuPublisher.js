@@ -83,19 +83,19 @@ async function publishMenu(client) {
         const roleId = subscription.role_id;
         const lastChunkIndex = messageChunks.length - 1;
 
+        await channel.send({
+          content: 'Tap below to rate the menu',
+          components: [rateButton],
+        });
+
         for (let i = 0; i < messageChunks.length; i++) {
           const isFirst = i === 0;
-          const isLast  = i === lastChunkIndex;
 
           const content = isFirst && roleId
             ? `<@&${roleId}>\n${messageChunks[i]}`
             : messageChunks[i];
 
-          // Attach the rate button to the first chunk so it appears at the top
-          // of the delivered menu instead of after the full list.
-          const components = isFirst ? [rateButton] : [];
-
-          await channel.send({ content, components });
+          await channel.send({ content });
         }
 
         await db.logDelivery(guildId, channelId, today, 'success', null);

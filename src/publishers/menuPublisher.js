@@ -91,7 +91,7 @@ async function publishMenu(client) {
             : messageChunks[i];
 
           const content = isFirst
-            ? `${menuContent}\n\nTap below to rate the menu`
+            ? `${menuContent}\n\n## **Tap below to rate the menu**`
             : menuContent;
 
           await channel.send({

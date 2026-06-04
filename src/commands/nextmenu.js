@@ -39,7 +39,7 @@ module.exports = {
       );
 
       await interaction.editReply({
-        content: `${chunks[0]}\n\nTap below to rate the menu`,
+        content: `${chunks[0]}\n\n## **Tap below to rate the menu**`,
         components: [rateButton],
       });
 

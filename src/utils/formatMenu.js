@@ -53,25 +53,31 @@ const UZUMASA_CATEGORY_EMOJIS = {
 // ── Kameoka menu config ─────────────────────────────────────────────────────
 
 const KAMEOKA_MENU_ORDER = [
-  { key: 'Set|||A',                   emoji: '🍱' },
-  { key: 'Set|||B',                   emoji: '🍱' },
-  { key: 'Live Kitchen|||Live Kitchen', emoji: '🍳' },
-  { key: 'Curry|||A',                 emoji: '🍛' },
-  { key: 'Curry|||B',                 emoji: '🍛' },
-  { key: 'Curry|||C',                 emoji: '🍛' },
-  { key: 'Ramen|||Ramen',             emoji: '🍜' },
-  { key: 'Side Dish|||A',             emoji: '🥗' },
-  { key: 'Side Dish|||B',             emoji: '🥗' },
-  { key: 'Side Dish|||C',             emoji: '🥗' },
-  { key: 'Side Dish|||Salad',         emoji: '🥬' },
+  { key: 'Set|||A',                     emoji: '🍱', label: 'Set A' },
+  { key: 'Set|||B',                     emoji: '🍱', label: 'Set B' },
+  { key: 'Live Kitchen|||Live Kitchen', emoji: '🍳', label: 'Live Kitchen' },
+  { key: 'Curry|||A',                   emoji: '🍛', label: 'Curry A (Original)' },
+  { key: 'Curry|||B',                   emoji: '🍛', label: 'Curry B (Cardamon)' },
+  { key: 'Curry|||C',                   emoji: '🍛', label: 'Curry C (Dry)' },
+  { key: 'Ramen|||Ramen',               emoji: '🍜', label: 'Ramen' },
+  { key: 'Side Dish|||A',               emoji: '🥗', label: 'Side A' },
+  { key: 'Side Dish|||B',               emoji: '🥗', label: 'Side B' },
+  { key: 'Side Dish|||C',               emoji: '🥗', label: 'Side C' },
+  { key: 'Side Dish|||Salad',           emoji: '🥬', label: 'Salad' },
 ];
 
 const KAMEOKA_CATEGORY_EMOJIS = {
-  'Set':          '🍱',
+  'Set Meals':    '🍱',
   'Live Kitchen': '🍳',
   'Curry':        '🍛',
   'Ramen':        '🍜',
-  'Side Dish':    '🥗',
+  'Sides':        '🥗',
+};
+
+/** Maps Kameoka DB category names to Uzumasa-style display names. */
+const KAMEOKA_CATEGORY_LABELS = {
+  'Set':       'Set Meals',
+  'Side Dish': 'Sides',
 };
 
 // ── Campus config lookup ────────────────────────────────────────────────────
@@ -85,6 +91,8 @@ const CAMPUS_CONFIG = {
     priceLookup(item) { return UZUMASA_PRICES[item.subcategory] ?? null; },
     showSetMealNote: true,
     footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**\n\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*',
+    categoryLabels: null,
+    menuOrderHasLabels: false,
   },
   Kameoka: {
     menuOrder: KAMEOKA_MENU_ORDER,
@@ -94,8 +102,33 @@ const CAMPUS_CONFIG = {
     priceLookup(item) { return item.price ?? null; },  // from DB `price` column
     showSetMealNote: false,
     footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**',
+    categoryLabels: KAMEOKA_CATEGORY_LABELS,
+    menuOrderHasLabels: true,
   },
 };
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Resolve a DB category name to its display name using campus config overrides. */
+function displayCategoryName(config, dbCategory, dbSubcategory) {
+  // Uzumasa special case: Curry Set subcategory under A La Carte
+  // is displayed as its own top-level category
+  if (dbSubcategory === 'Curry Set') return 'Curry Set';
+
+  // Check campus category label overrides
+  if (config.categoryLabels?.[dbCategory]) {
+    return config.categoryLabels[dbCategory];
+  }
+  return dbCategory;
+}
+
+/** Resolve the subcategory display name from the menuOrder entry. */
+function displaySubcategoryName(entry, config) {
+  if (config.menuOrderHasLabels && entry.label) {
+    return entry.label;
+  }
+  return entry.subcategoryName;
+}
 
 // ── Core formatter ──────────────────────────────────────────────────────────
 
@@ -120,82 +153,79 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
     grouped[key].push(item);
   }
 
+  // Build ordered sections from menuOrder
   const sections = new Map();
-  for (const { key, emoji } of config.menuOrder) {
-    if (!grouped[key]) {
-      continue;
-    }
+  for (const entry of config.menuOrder) {
+    if (!grouped[entry.key]) continue;
 
-    const [category, subcategory] = key.split('|||');
-    const categoryName = category.trim();
-    const subcategoryName = subcategory.trim();
-    const displayCategoryName = subcategoryName === 'Curry Set' ? 'Curry Set' : categoryName;
+    const [category, subcategory] = entry.key.split('|||');
+    entry.categoryName = category.trim();
+    entry.subcategoryName = subcategory.trim();
 
-    if (!sections.has(displayCategoryName)) {
-      sections.set(displayCategoryName, {
-        emoji: config.categoryEmojis[displayCategoryName] || emoji || '🍴',
+    const dCat = displayCategoryName(config, entry.categoryName, entry.subcategoryName);
+    const dSub = displaySubcategoryName(entry, config);
+
+    if (!sections.has(dCat)) {
+      sections.set(dCat, {
+        emoji: config.categoryEmojis[dCat] || entry.emoji || '🍴',
         items: [],
       });
     }
 
-    sections.get(displayCategoryName).items.push({
-      key,
-      emoji,
-      categoryName,
-      subcategoryName,
-      dishes: grouped[key],
+    sections.get(dCat).items.push({
+      entry,
+      displaySubcategoryName: dSub,
+      dishes: grouped[entry.key],
     });
   }
 
   let message = `# ${config.headerTitle} — ${dayName}, ${menuDate}\n\n`;
   let lastCategory = null;
 
-  for (const [displayCategoryName, section] of sections) {
+  for (const [dCat, section] of sections) {
+    // Section-level price (when all subcategories share the same price)
     const sectionPrices = new Set(
       section.items
-        .map((item) => config.priceLookup({ subcategory: item.subcategoryName, price: item.dishes[0].price }))
+        .map((item) => config.priceLookup({ subcategory: item.entry.subcategoryName, price: item.dishes[0].price }))
         .filter((price) => typeof price === 'number')
     );
     const sharedSectionPrice = sectionPrices.size === 1 ? [...sectionPrices][0] : null;
     const sectionPriceStr = sharedSectionPrice
-      ? `  ·  ¥${sharedSectionPrice}${config.showSetMealNote && config.setMealSubcategories.has(section.items[0].subcategoryName) ? ' (+ 1 side/salad)' : ''}`
+      ? `  ·  ¥${sharedSectionPrice}${config.showSetMealNote && config.setMealSubcategories.has(section.items[0].entry.subcategoryName) ? ' (+ 1 side/salad)' : ''}`
       : '';
 
     // Category header
-    if (displayCategoryName !== lastCategory) {
-      if (lastCategory !== null) {
-        message += '\n';
-      }
-      message += `## ${section.emoji} ${displayCategoryName}${sectionPriceStr}\n`;
-      lastCategory = displayCategoryName;
+    if (dCat !== lastCategory) {
+      if (lastCategory !== null) message += '\n';
+      message += `## ${section.emoji} ${dCat}${sectionPriceStr}\n`;
+      lastCategory = dCat;
     }
 
     for (const item of section.items) {
-      const showSubcategoryName =
-        displayCategoryName !== 'Curry Set' &&
-        displayCategoryName !== 'Halal' &&
-        item.subcategoryName.toLowerCase() !== displayCategoryName.toLowerCase();
+      const showSubName =
+        dCat !== 'Halal' &&
+        dCat !== 'Curry Set' &&
+        item.displaySubcategoryName.toLowerCase() !== dCat.toLowerCase();
 
-      const subcategoryPriceStr = sharedSectionPrice
+      const subPriceStr = sharedSectionPrice
         ? ''
         : (() => {
-            const price = config.priceLookup({ subcategory: item.subcategoryName, price: item.dishes[0].price });
-            const isSetMeal = config.setMealSubcategories.has(item.subcategoryName);
+            const price = config.priceLookup({ subcategory: item.entry.subcategoryName, price: item.dishes[0].price });
+            const isSetMeal = config.setMealSubcategories.has(item.entry.subcategoryName);
             return price ? `  ·  ¥${price}${config.showSetMealNote && isSetMeal ? ' (+ 1 side/salad)' : ''}` : '';
           })();
 
-      if (showSubcategoryName) {
-        message += `**— ${item.subcategoryName}${subcategoryPriceStr} —**\n`;
+      if (showSubName) {
+        message += `**— ${item.displaySubcategoryName}${subPriceStr} —**\n`;
       }
 
       for (const dish of item.dishes) {
-        // ── Rating badge (only when the dish has prior ratings) ─────────────
         const ratingInfo = ratingsMap.get(dish.dish_name);
         const ratingBadge = ratingInfo
           ? ` ⭐ ${ratingInfo.avg.toFixed(1)} *(${ratingInfo.count})*`
           : '';
 
-        message += `> ${item.emoji} **${dish.dish_name}**${ratingBadge}\n`;
+        message += `> ${item.entry.emoji} **${dish.dish_name}**${ratingBadge}\n`;
 
         const nutrition = [];
         if (dish.calories) nutrition.push(`${dish.calories} kcal`);
@@ -224,15 +254,11 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
   let remaining = message;
   while (remaining.length > 1900) {
     let splitAt = remaining.lastIndexOf('\n', 1900);
-    if (splitAt === -1) {
-      splitAt = 1900;
-    }
+    if (splitAt === -1) splitAt = 1900;
     chunks.push(remaining.substring(0, splitAt));
     remaining = remaining.substring(splitAt).trim();
   }
-  if (remaining.length > 0) {
-    chunks.push(remaining);
-  }
+  if (remaining.length > 0) chunks.push(remaining);
 
   return chunks;
 }

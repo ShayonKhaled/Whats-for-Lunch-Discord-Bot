@@ -5,14 +5,13 @@ const path = require('path');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const db = require('./db');
 const logger = require('./utils/logger');
+const { handleRatingInteraction } = require('./interactions/rateMenu');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.MessageContent,
-
   ],
 });
 
@@ -34,9 +33,9 @@ for (const envVar of requiredEnvVars) {
 // Initialize command collection
 client.commands = new Collection();
 
-// Load commands from src/commands/
+// Load commands
 const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith('.js'));
+const commandFiles = fs.readdirSync(commandsPath).filter((f) => f.endsWith('.js'));
 
 for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
@@ -49,9 +48,9 @@ for (const file of commandFiles) {
   }
 }
 
-// Load events from src/events/
+// Load events
 const eventsPath = path.join(__dirname, 'events');
-const eventFiles = fs.readdirSync(eventsPath).filter((file) => file.endsWith('.js'));
+const eventFiles = fs.readdirSync(eventsPath).filter((f) => f.endsWith('.js'));
 
 for (const file of eventFiles) {
   const filePath = path.join(eventsPath, file);
@@ -64,31 +63,35 @@ for (const file of eventFiles) {
   logger.debug(`✅ Loaded event: ${event.name}`);
 }
 
-// Handle slash command interactions
+// Interaction handler
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) {
-    return;
+  // ── Rating interactions (buttons + select menus) ──────────────────────────
+  if (interaction.isButton() || interaction.isStringSelectMenu()) {
+    try {
+      const handled = await handleRatingInteraction(interaction);
+      if (handled) return;
+    } catch (err) {
+      logger.error(`Rating interaction error: ${err.message}`);
+      // Fall through — don't crash the process over a rating failure
+    }
   }
+
+  // ── Slash commands ────────────────────────────────────────────────────────
+  if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
 
   if (!command) {
     logger.warn(`⚠️ Command not found: ${interaction.commandName}`);
-    return interaction.reply({
-      content: '❌ Command not found.',
-      ephemeral: true,
-    });
+    return interaction.reply({ content: '❌ Command not found.', ephemeral: true });
   }
 
   try {
     await command.execute(interaction);
   } catch (error) {
     logger.error(`Error executing command ${interaction.commandName}: ${error.message}`);
-    const reply = {
-      content: '❌ There was an error executing this command.',
-      ephemeral: true,
-    };
-    if (interaction.replied) {
+    const reply = { content: '❌ There was an error executing this command.', ephemeral: true };
+    if (interaction.replied || interaction.deferred) {
       await interaction.followUp(reply);
     } else {
       await interaction.reply(reply);
@@ -96,14 +99,9 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// Handle guild joins (optional telemetry)
-client.on('guildCreate', (guild) => {
-  logger.info(`🎉 Bot added to server: ${guild.name} (${guild.id})`);
-});
-
-client.on('guildDelete', (guild) => {
-  logger.info(`👋 Bot removed from server: ${guild.name} (${guild.id})`);
-});
+// Guild telemetry
+client.on('guildCreate', (guild) => logger.info(`🎉 Bot added to server: ${guild.name} (${guild.id})`));
+client.on('guildDelete', (guild) => logger.info(`👋 Bot removed from server: ${guild.name} (${guild.id})`));
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
@@ -120,13 +118,9 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-// Start the bot
 async function start() {
   try {
-    // Initialize database connection
     await db.initConnection();
-
-    // Login to Discord
     await client.login(process.env.DISCORD_BOT_TOKEN);
   } catch (error) {
     logger.error(`❌ Failed to start bot: ${error.message}`);

@@ -37,23 +37,13 @@ async function initConnection() {
 async function addSubscription(guildId, guildName, channelId, channelName, roleId) {
   try {
     const result = await pool.query(
-      `INSERT INTO guild_subscriptions (guild_id, guild_name, channel_id, channel_name, role_id, is_active, subscribed_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+      `INSERT INTO guild_subscriptions (guild_id, guild_name, channel_id, channel_name, role_id)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (guild_id) DO UPDATE
-       SET channel_id = $3, channel_name = $4, role_id = $5, is_active = TRUE, updated_at = NOW()
+       SET channel_id = $3, channel_name = $4, role_id = $5, updated_at = NOW()
        RETURNING *`,
       [guildId, guildName, channelId, channelName, roleId]
     );
-
-    // If channel changed, clear any pending delivery for today so the new channel gets the menu
-    await pool.query(
-      `DELETE FROM bot_delivery_log
-       WHERE guild_id = $1
-       AND menu_date::date = CURRENT_DATE
-       AND status = 'pending'`,
-      [guildId]
-    );
-
     logger.info(`✅ Added/updated subscription: guild=${guildId}, channel=${channelId}, role=${roleId}`);
     return result.rows[0];
   } catch (err) {
@@ -61,25 +51,6 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
     throw err;
   }
 }
-
-
-async function addHalalMenuItem({ campus, week_of, day_name, menu_date, dish_name }) {
-  try {
-    const result = await pool.query(
-      `INSERT INTO menu_items (campus, week_of, day_name, menu_date, category, subcategory, dish_name)
-       VALUES ($1, $2, $3, $4, 'Halal', 'Halal', $5)
-       ON CONFLICT (campus, menu_date, dish_name, subcategory) DO NOTHING
-       RETURNING *`,
-      [campus, week_of, day_name, menu_date, dish_name]
-    );
-    logger.debug(`Halal insert: ${dish_name} on ${menu_date} — ${result.rows.length ? 'inserted' : 'already exists'}`);
-    return result.rows[0] || null;
-  } catch (err) {
-    logger.error(`Error inserting halal menu item: ${err.message}`);
-    throw err;
-  }
-}
-
 
 async function removeSubscription(guildId) {
   try {
@@ -110,8 +81,6 @@ async function getActiveSubscriptions() {
 
 async function getTodayMenu() {
   try {
-    // Cast menu_date to date for a consistent comparison regardless of
-    // whether the column is stored as date or varchar.
     const result = await pool.query(
       `SELECT * FROM menu_items WHERE menu_date::date = CURRENT_DATE ORDER BY category, subcategory`
     );
@@ -165,19 +134,15 @@ async function getNextMenu() {
   }
 }
 
-
-async function claimDelivery(guildId, channelId, menuDate) {
+async function hasSuccessfulDelivery(guildId, menuDate) {
   try {
     const result = await pool.query(
-      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status)
-       VALUES ($1, $2, $3::text, 'pending')
-       ON CONFLICT (guild_id, menu_date) DO NOTHING
-       RETURNING *`,
-      [guildId, channelId, menuDate]
+      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND menu_date = $2 AND status = 'success'`,
+      [guildId, menuDate]
     );
     return result.rows.length > 0;
   } catch (err) {
-    logger.error(`Error claiming delivery: ${err.message}`);
+    logger.error(`Error checking delivery log: ${err.message}`);
     throw err;
   }
 }
@@ -185,10 +150,13 @@ async function claimDelivery(guildId, channelId, menuDate) {
 async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
   try {
     await pool.query(
-      `UPDATE bot_delivery_log
-       SET status = $2, error_message = $3, delivered_at = NOW()
-       WHERE guild_id = $1 AND menu_date = $4::text`,
-      [guildId, status, errorMessage, menuDate]
+      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status, error_message)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (guild_id, menu_date) DO UPDATE
+         SET status = EXCLUDED.status,
+             error_message = EXCLUDED.error_message,
+             delivered_at = NOW()`,
+      [guildId, channelId, menuDate, status, errorMessage]
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);
   } catch (err) {
@@ -196,7 +164,6 @@ async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
     throw err;
   }
 }
-
 
 async function getSubscriptionByGuildId(guildId) {
   try {
@@ -208,6 +175,86 @@ async function getSubscriptionByGuildId(guildId) {
   } catch (err) {
     logger.error(`Error fetching subscription: ${err.message}`);
     throw err;
+  }
+}
+
+// ─── Dish ratings ────────────────────────────────────────────────────────────
+
+/**
+ * Upsert a rating. Returns the saved row.
+ * One rating per user per dish per day per guild — repeated calls update it.
+ */
+async function upsertRating(guildId, userId, menuDate, dishName, rating) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO dish_ratings (guild_id, user_id, menu_date, dish_name, rating)
+       VALUES ($1::bigint, $2::bigint, $3::text, $4, $5)
+       ON CONFLICT (dish_name, menu_date, guild_id, user_id)
+       DO UPDATE SET rating = EXCLUDED.rating, rated_at = NOW()
+       RETURNING *`,
+      [guildId, userId, menuDate, dishName, rating]
+    );
+    logger.debug(`⭐ Rating saved: "${dishName}" = ${rating} by user=${userId} guild=${guildId}`);
+    return result.rows[0];
+  } catch (err) {
+    logger.error(`Error upserting rating: ${err.message}`);
+    throw err;
+  }
+}
+
+/**
+ * Fetch aggregate ratings for a list of dish names.
+ * Returns a Map: dishName → { avg: number, count: number }
+ *
+ * Used by formatMenu to decorate recurring dishes.
+ */
+async function getRatingsForDishes(dishNames) {
+  if (!dishNames || dishNames.length === 0) return new Map();
+  try {
+    const result = await pool.query(
+      `SELECT dish_name,
+              ROUND(AVG(rating)::numeric, 1) AS avg_rating,
+              COUNT(*)::int                  AS rating_count
+       FROM dish_ratings
+       WHERE dish_name = ANY($1)
+       GROUP BY dish_name`,
+      [dishNames]
+    );
+    const map = new Map();
+    for (const row of result.rows) {
+      map.set(row.dish_name, {
+        avg: parseFloat(row.avg_rating),
+        count: row.rating_count,
+      });
+    }
+    return map;
+  } catch (err) {
+    logger.error(`Error fetching dish ratings: ${err.message}`);
+    // Non-fatal — return empty map so the menu still renders
+    return new Map();
+  }
+}
+
+/**
+ * Fetch a single user's ratings for a specific date + guild.
+ * Returns a Map: dishName → rating (1–5)
+ */
+async function getUserRatingsForDate(guildId, userId, menuDate) {
+  try {
+    const result = await pool.query(
+      `SELECT dish_name, rating
+       FROM dish_ratings
+       WHERE guild_id = $1::bigint AND user_id = $2::bigint AND menu_date = $3::text`,
+      [guildId, userId, menuDate]
+    );
+    const map = new Map();
+    for (const row of result.rows) {
+      map.set(row.dish_name, row.rating);
+    }
+    return map;
+  } catch (err) {
+    logger.error(`Error fetching user ratings: ${err.message}`);
+    return new Map();
   }
 }
 
@@ -226,8 +273,12 @@ module.exports = {
   getTodayMenu,
   getMenuByDate,
   getNextMenu,
-  claimDelivery,      
+  hasSuccessfulDelivery,
   logDelivery,
   getSubscriptionByGuildId,
+  // ratings
+  upsertRating,
+  getRatingsForDishes,
+  getUserRatingsForDate,
   closeConnection,
 };

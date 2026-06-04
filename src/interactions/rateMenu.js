@@ -122,12 +122,16 @@ function buildStarSelect(menuDate, dishKey, existingRating = null, campus) {
 
 /**
  * "Rate Menu" button pressed → show dish picker.
- * customId: "rate_menu_open:<menuDate>"
+ * customId (new):  "rate_menu_open:<campus>:<menuDate>"
+ * customId (old):  "rate_menu_open:<menuDate>"  — backward-compat, defaults to Uzumasa
  */
 async function handleRateMenuOpen(interaction) {
   const parts = interaction.customId.split(':');
-  const campus = parts[1]; // 'Uzumasa' or 'Kameoka'
-  const menuDate = parts[2];
+  // parts[0] = 'rate_menu_open'
+  // New format: parts[1] = campus, parts[2] = date  (3 segments total)
+  // Old format: parts[1] = date                     (2 segments total, pre-multi-campus)
+  const campus = parts.length >= 3 ? parts[1] : 'Uzumasa';
+  const menuDate = parts.length >= 3 ? parts[2] : parts[1];
 
   try {
     const items = await db.getMenuByDate(menuDate, campus);

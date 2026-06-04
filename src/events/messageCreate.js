@@ -6,6 +6,15 @@ const OWNER_ID = process.env.BOT_ADMIN_ID;
 const UPLOAD_CHANNEL_NAME = 'halal-menu-upload';
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
+const FETCH_TIMEOUT_MS = 60_000;   // 60s for image + API call
+const API_TIMEOUT_MS   = 90_000;   // Claude Vision can be slow
+
+function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 module.exports = {
   name: 'messageCreate',
   once: false,
@@ -40,7 +49,7 @@ module.exports = {
     try {
       // Download the image and convert to base64
 
-      const imageResponse = await fetch(attachment.url);
+      const imageResponse = await fetchWithTimeout(attachment.url);
       const imageBuffer = await imageResponse.arrayBuffer();
 
       const image = await loadImage(Buffer.from(imageBuffer));
@@ -53,7 +62,7 @@ module.exports = {
       const base64Image = compressedBuffer.toString('base64');
       const mediaType = 'image/jpeg';
       // Send to Claude vision for extraction
-      const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      const claudeResponse = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -101,7 +110,7 @@ Return only the JSON array.`,
             },
           ],
         }),
-      });
+      }, API_TIMEOUT_MS);
 
       if (!claudeResponse.ok) {
         const err = await claudeResponse.text();
@@ -167,10 +176,15 @@ Return only the JSON array.`,
   },
 };
 
-// Returns the ISO week string for a given date, e.g. "2026-W21"
+// Returns the Monday date of the week containing the given date, e.g. "2026-05-18"
 function getWeekOf(dateStr) {
-  const date = new Date(dateStr);
-  const jan4 = new Date(date.getFullYear(), 0, 4);
-  const weekNum = Math.ceil(((date - jan4) / 86400000 + jan4.getDay() + 1) / 7);
-  return `${date.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const daysFromMonday = (dayOfWeek + 6) % 7;
+  const monday = new Date(year, month - 1, day - daysFromMonday);
+  const y = monday.getFullYear();
+  const m = String(monday.getMonth() + 1).padStart(2, '0');
+  const d = String(monday.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }

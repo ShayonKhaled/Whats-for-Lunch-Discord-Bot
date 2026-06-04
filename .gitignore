@@ -2,5 +2,5 @@
 .env
 logs/
 node_modules/
-CLAUDE.md
 .claude/
+CLAUDE.md

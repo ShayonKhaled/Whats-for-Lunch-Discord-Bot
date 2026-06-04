@@ -151,6 +151,7 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
         if (dish.calories) nutrition.push(`${dish.calories} kcal`);
         if (dish.protein)  nutrition.push(`Protein ${dish.protein}g`);
         if (dish.fat)      nutrition.push(`Fat ${dish.fat}g`);
+        if (dish.sodium)   nutrition.push(`Sodium ${dish.sodium}g`);
 
         if (nutrition.length > 0) {
           message += `> 📊 ${nutrition.join('  ·  ')}\n`;

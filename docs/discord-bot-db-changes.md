@@ -1,6 +1,8 @@
 # Discord Bot — Database Changes Summary
 
-This file is for the Claude Code instance in the Discord bot repository. It documents changes made to the shared PostgreSQL database so the Discord poster can be updated accordingly.
+> ✅ **Implemented** — 2026-06-05. See `CHANGELOG.md` v1.1.0.
+
+This file documents the DB changes that prompted the multi-campus update to the Discord bot.
 
 ## New Campus: Kameoka
 

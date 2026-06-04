@@ -3,7 +3,7 @@
 ![Status](https://img.shields.io/badge/status-stable-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-A Discord bot that broadcasts the daily Uzumasa Campus cafeteria menu to subscribed servers every weekday at 9:00 AM JST. Reads from the same PostgreSQL database populated by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) and delivers it to any number of Discord servers independently.
+A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria menus to subscribed servers every weekday at 9:00 AM JST. Reads from the same PostgreSQL database populated by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) and delivers it to any number of Discord servers independently.
 
 ---
 
@@ -32,23 +32,26 @@ A Discord bot that broadcasts the daily Uzumasa Campus cafeteria menu to subscri
 [Discord Bot: src/bot.js]
          │
          ├─ 9:00 AM JST, Mon–Fri → menuPublisher.js
-         │         ├─ getTodayMenu() → SELECT * FROM menu_items WHERE menu_date = CURRENT_DATE
-         │         ├─ formatMenuMessage() → groups by category/subcategory, builds Discord markdown
-         │         ├─ getActiveSubscriptions() → SELECT * FROM guild_subscriptions WHERE is_active
+         │         ├─ getActiveSubscriptions() → groups by campus
+         │         ├─ getTodayMenu(campus) → per-campus menu fetch
+         │         ├─ formatMenuMessage(…, campus) → campus-specific formatting
          │         ├─ channel.send() → posts to each subscribed guild's channel
-         │         │         └─ @notify-menu role mentioned on first chunk
-         │         └─ logDelivery() → INSERT INTO bot_delivery_log (prevents re-posts)
+         │         │         └─ @notify-menu-<campus> role mentioned on first chunk
+         │         └─ logDelivery() → INSERT INTO bot_delivery_log (per guild+campus+date)
+         │
+         ├─ Campus Selection (buttons on every command)
+         │         └─ campusSelector.js → "Uzumasa" / "Kameoka" buttons → executeForCampus()
          │
          ├─ Slash Commands
-         │         ├─ /subscribe   → creates notify-menu role, saves to guild_subscriptions
-         │         ├─ /unsubscribe → sets is_active = FALSE
-         │         ├─ /notify      → toggles notify-menu role on the requesting member
-         │         ├─ /status      → returns subscription info for the current guild
-         │         ├─ /preview     → ephemeral: today's menu from DB
-         │         └─ /nextmenu    → ephemeral: next available weekday's menu from DB
+         │         ├─ /subscribe   → campus picker → creates notify-menu-<campus> role, upserts subscription
+         │         ├─ /unsubscribe → campus picker → sets is_active = FALSE for that campus
+         │         ├─ /notify      → campus picker → toggles campus-specific notify role on member
+         │         ├─ /status      → campus picker → returns subscription info for that campus (+ cross-campus info)
+         │         ├─ /preview     → campus picker → ephemeral: today's menu for chosen campus
+         │         └─ /nextmenu    → campus picker → ephemeral: next weekday's menu for chosen campus
          │
          ├─ Rating Interactions (buttons + select menus)
-         │         ├─ "Rate today's dishes" button on every menu post
+         │         ├─ "Rate today's dishes" button on every menu post (campus-aware custom IDs)
          │         ├─ Dish picker → star rating select → upsert into dish_ratings
          │         └─ Aggregate ratings shown as ⭐ avg (n) next to recurring dishes
          │
@@ -81,6 +84,7 @@ CREATE TABLE menu_items (
   protein     NUMERIC(5,1),
   fat         NUMERIC(5,1),
   sodium      NUMERIC(5,1),
+  price       INTEGER,                       -- yen, nullable (populated for Kameoka)
   created_at  TIMESTAMP DEFAULT NOW(),
   CONSTRAINT unique_dish UNIQUE (campus, menu_date, dish_name, subcategory)
 );
@@ -90,14 +94,16 @@ CREATE TABLE menu_items (
 
 ```sql
 CREATE TABLE guild_subscriptions (
-  guild_id        VARCHAR(20) PRIMARY KEY,
+  guild_id        VARCHAR(20) NOT NULL,
   guild_name      TEXT NOT NULL,
   channel_id      VARCHAR(20) NOT NULL,
   channel_name    TEXT,
-  role_id         VARCHAR(20),             -- ID of the auto-created notify-menu role
+  role_id         VARCHAR(20),             -- ID of the auto-created notify-menu-<campus> role
+  campus          VARCHAR(50) NOT NULL DEFAULT 'Uzumasa',  -- 'Uzumasa' or 'Kameoka'
   is_active       BOOLEAN DEFAULT TRUE,
   subscribed_at   TIMESTAMP DEFAULT NOW(),
-  updated_at      TIMESTAMP DEFAULT NOW()
+  updated_at      TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (guild_id, campus)
 );
 ```
 
@@ -108,11 +114,12 @@ CREATE TABLE bot_delivery_log (
   id            SERIAL PRIMARY KEY,
   guild_id      VARCHAR(20) NOT NULL,
   channel_id    VARCHAR(20) NOT NULL,
+  campus        VARCHAR(50) NOT NULL DEFAULT 'Uzumasa',  -- 'Uzumasa' or 'Kameoka'
   menu_date     TEXT NOT NULL,
   status        TEXT NOT NULL,             -- 'success', 'failed', 'skipped'
   error_message TEXT,
   delivered_at  TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT unique_delivery UNIQUE (guild_id, menu_date)
+  CONSTRAINT unique_delivery UNIQUE (guild_id, campus, menu_date)
 );
 ```
 
@@ -137,19 +144,25 @@ CREATE TABLE dish_ratings (
 
 **Menu Publisher** (`src/publishers/menuPublisher.js`)
 - Scheduled with `node-schedule` at `0 9 * * 1-5`, timezone `Asia/Tokyo`
-- Skips guilds that already have a `success` log entry for today; `failed` and `skipped` rows do not block redelivery
-- Mentions the guild's `notify-menu` role on the first message chunk only
+- Groups active subscriptions by campus, fetches each campus's menu once
+- Skips guild+campus combos that already have a `success` log entry for today
+- Mentions the guild's `notify-menu-<campus>` role on the first message chunk only
+- Formats menus with campus-specific config (Uzumasa hardcoded prices, Kameoka prices from DB)
 - Alerts `BOT_ADMIN_ID` via DM if any guild delivery fails
 - Splits formatted menus into ≤1900-char chunks to stay under Discord's 2000-char message limit
 
 **Slash Commands** (`src/commands/`)
+- All commands show a **campus selector** (Uzumasa / Kameoka buttons) before performing their action
 - `/subscribe` and `/unsubscribe` require `ManageGuild` permission
-- `/subscribe` automatically creates a `notify-menu` role in the server if one does not already exist; the role ID is stored in `guild_subscriptions.role_id`
-- `/notify` is self-serve — any member can toggle their own ping without admin involvement
-- `/preview` and `/nextmenu` are ephemeral (only the requesting user sees the response)
+- `/subscribe` automatically creates a per-campus role (`notify-menu-uzumasa` or `notify-menu-kameoka`) in the server if one does not already exist; the role ID is stored in `guild_subscriptions.role_id`
+- A guild can subscribe to both campuses (in the same or different channels)
+- `/notify` is self-serve — any member can toggle their per-campus ping without admin involvement
+- `/preview` and `/nextmenu` responses are ephemeral (only the requesting user sees them)
+- `/status` shows subscription info for the chosen campus and cross-references the other campus if also subscribed
 
 **Halal Menu Upload** (`src/events/messageCreate.js`)
 - Only active in channels named `halal-menu-upload`, restricted to the bot owner
+- Campus configurable via `HALAL_CAMPUS` env var (defaults to `Uzumasa`)
 - Image is resized to a max width of 1800px and compressed to JPEG before sending to Claude
 - Claude Vision (`claude-sonnet-4-6`) extracts dish name, day name, and date from the poster
 - Extracted items are inserted into `menu_items` with `category = 'Halal'` and `subcategory = 'Halal'`
@@ -171,12 +184,6 @@ Run the schema migration against your PostgreSQL instance:
 
 ```bash
 psql -d campus_lunch -f database/discord-bot-schema.sql
-```
-
-If upgrading from an older version that does not have the `role_id` column:
-
-```bash
-psql -d campus_lunch -f migrations/add_role_id.sql
 ```
 
 ### 2. Discord Developer Portal
@@ -221,12 +228,12 @@ The bot logs `✅ Bot is online and ready!` when connected.
 
 | Command | Who | Description |
 |---|---|---|
-| `/subscribe` | Admins | Subscribes the current channel to daily menu posts. Creates a `notify-menu` role automatically. |
-| `/unsubscribe` | Admins | Stops daily posts. Data is preserved and the server can re-subscribe at any time. |
-| `/notify` | Everyone | Toggles the `notify-menu` ping role on yourself. |
-| `/status` | Everyone | Shows whether this server is subscribed and which channel receives posts. |
-| `/preview` | Everyone | Ephemeral view of today's menu. |
-| `/nextmenu` | Everyone | Ephemeral view of the next available weekday's menu. |
+| `/subscribe` | Admins | Campus picker → subscribes the current channel to daily menu posts for that campus. Creates a `notify-menu-<campus>` role automatically. |
+| `/unsubscribe` | Admins | Campus picker → stops daily posts for that campus. Data is preserved and can re-subscribe anytime. |
+| `/notify` | Everyone | Campus picker → toggles the campus-specific notify-menu ping role on yourself. |
+| `/status` | Everyone | Campus picker → shows whether this server is subscribed to that campus, which channel receives posts, and if the other campus is also subscribed. |
+| `/preview` | Everyone | Campus picker → ephemeral view of today's menu for the chosen campus. |
+| `/nextmenu` | Everyone | Campus picker → ephemeral view of the next available weekday's menu for the chosen campus. |
 
 Daily menu posts include a **"⭐ Rate today's dishes"** button. Tapping it opens an ephemeral flow where users pick a dish and rate it 1–5 stars. Previously-rated dishes show a star badge (e.g. `⭐ 4.2 (12)`) next to their name in future menus.
 
@@ -246,6 +253,7 @@ Daily menu posts include a **"⭐ Rate today's dishes"** button. Tapping it open
 | `POSTGRES_HOST` | PostgreSQL host | defaults to `localhost` |
 | `POSTGRES_PORT` | PostgreSQL port | defaults to `5432` |
 | `ANTHROPIC_API_KEY` | Anthropic API key (required for halal menu upload) | Yes if using halal upload |
+| `HALAL_CAMPUS` | Campus name for halal menu uploads | defaults to `Uzumasa` |
 | `BOT_ADMIN_ID` | Your Discord user ID — receives DM alerts on delivery failures | optional |
 | `NODE_ENV` | Set to `production` in deployment | defaults to `development` |
 | `LOG_LEVEL` | Logging verbosity: `debug`, `info`, `warn` | defaults to `info` |
@@ -268,18 +276,19 @@ wfl-bot/
 │   ├── bot.js                     # Main entry point, command and event loader
 │   ├── db.js                      # PostgreSQL connection pool and all query functions
 │   ├── commands/
-│   │   ├── subscribe.js           # /subscribe — sets up channel and creates notify-menu role
-│   │   ├── unsubscribe.js         # /unsubscribe — deactivates subscription
-│   │   ├── notify.js              # /notify — self-serve role toggle for members
-│   │   ├── status.js              # /status — subscription info for this guild
-│   │   ├── preview.js             # /preview — today's menu (ephemeral)
-│   │   └── nextmenu.js            # /nextmenu — next weekday's menu (ephemeral)
+│   │   ├── subscribe.js           # /subscribe — campus picker → creates notify-menu-<campus> role
+│   │   ├── unsubscribe.js         # /unsubscribe — campus picker → deactivates subscription
+│   │   ├── notify.js              # /notify — campus picker → toggles campus-specific role
+│   │   ├── status.js              # /status — campus picker → subscription info (+ cross-campus)
+│   │   ├── preview.js             # /preview — campus picker → today's menu (ephemeral)
+│   │   └── nextmenu.js            # /nextmenu — campus picker → next weekday's menu (ephemeral)
 │   ├── publishers/
-│   │   └── menuPublisher.js       # Cron job: 9:00 AM JST Mon–Fri, delivers to all guilds
+│   │   └── menuPublisher.js       # Cron job: 9:00 AM JST Mon–Fri, groups by campus, delivers per-campus menus
 │   ├── utils/
-│   │   ├── formatMenu.js          # Groups items by category, builds Discord markdown chunks
+│   │   ├── formatMenu.js          # Campus-aware formatting (Uzumasa hardcoded prices, Kameoka from DB)
 │   │   └── logger.js              # Winston logger: file and console transports
 │   ├── interactions/
+│   │   ├── campusSelector.js      # Campus picker buttons (Uzumasa / Kameoka) for all commands
 │   │   └── rateMenu.js            # Rating button/select-menu interaction handler
 │   └── events/
 │       ├── ready.js               # Bot ready: starts the publisher scheduler
@@ -326,7 +335,7 @@ sudo journalctl -u campus-lunch-discord-bot -f
 
 1. **No rate limiting on halal uploads** — a bad actor in the upload channel could spam Claude API calls
 2. **Global command propagation is slow** — Discord takes up to 1 hour; use guild commands during development
-3. **Delivery log blocks same-day redelivery on channel change** — if a guild changes channels mid-day, the success log prevents re-posting until the next day
+3. **Delivery log blocks same-day redelivery on channel change** — if a guild changes channels mid-day for a campus, the success log prevents re-posting that campus until the next day
 4. **No web dashboard** — subscription management is entirely through slash commands; an admin panel would help for multi-guild oversight
 
 ---
@@ -340,19 +349,19 @@ sudo journalctl -u campus-lunch-discord-bot -f
 
 ## Troubleshooting
 
-**`/notify` says the server isn't set up even after `/subscribe`**
-The `role_id` column is missing. Run `migrations/add_role_id.sql`, then `/unsubscribe` and `/subscribe` again to repopulate it.
+**`/notify` says the campus isn't set up even after `/subscribe`**
+Ensure you're selecting the correct campus when running `/notify`. Each campus has a separate subscription and role. If the role was deleted, ask an admin to re-run `/subscribe` for that campus.
 
 **Commands not appearing in a server**
 Run `npm run register` and wait up to one hour. For instant results during testing, use `scripts/registerGuildCommands.js --guild <GUILD_ID>`.
 
 **Menu not posting at 9 AM**
-- Verify menu data exists: `SELECT COUNT(*) FROM menu_items WHERE menu_date::date = CURRENT_DATE;`
+- Verify menu data exists: `SELECT campus, COUNT(*) FROM menu_items WHERE menu_date::date = CURRENT_DATE GROUP BY campus;`
 - Verify the guild is active: `SELECT * FROM guild_subscriptions WHERE is_active = TRUE;`
-- Check for a delivery log entry: `SELECT * FROM bot_delivery_log WHERE menu_date = CURRENT_DATE::text;`
+- Check for a delivery log entry: `SELECT * FROM bot_delivery_log WHERE menu_date = CURRENT_DATE::text AND campus = 'Uzumasa';`
 - Check logs: `tail -f logs/bot.log`
 
-**Bot cannot create the `notify-menu` role**
+**Bot cannot create the `notify-menu-<campus>` role**
 Ensure the bot has **Manage Roles** permission and that its own role sits above any roles it needs to manage in the server's role hierarchy.
 
 **Menu not posting to a channel**

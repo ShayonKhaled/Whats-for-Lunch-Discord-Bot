@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
  
+## [1.1.0] - 2026-06-05
+- Multi-campus support: Uzumasa and Kameoka campuses
+- Campus selector buttons on all slash commands (/subscribe, /unsubscribe, /preview, /nextmenu, /status, /notify)
+- Per-campus notify-menu roles (notify-menu-uzumasa, notify-menu-kameoka)
+- Kameoka Campus menu formatting with prices from database
+- Publisher groups subscriptions by campus, delivers per-campus menus
+- Rating custom IDs include campus for per-campus rating flows
+
 ## [1.0.3] - 2026-06-04
 - Added a "Rate today's dishes" button
 - Users can rate menu items from 1 to 5 stars

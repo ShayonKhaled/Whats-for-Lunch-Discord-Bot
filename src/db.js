@@ -84,7 +84,8 @@ async function getActiveSubscriptions() {
 async function getSubscriptionsByGuildId(guildId) {
   try {
     const result = await pool.query(
-      `SELECT * FROM guild_subscriptions WHERE guild_id = $1 AND is_active = TRUE`
+      `SELECT * FROM guild_subscriptions WHERE guild_id = $1 AND is_active = TRUE`,
+      [guildId]
     );
     return result.rows;
   } catch (err) {

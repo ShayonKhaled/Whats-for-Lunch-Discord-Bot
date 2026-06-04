@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
+const { buildCampusSelector } = require('../interactions/campusSelector');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -8,16 +9,23 @@ module.exports = {
     .setDescription('Check the menu bot subscription status for this server'),
 
   async execute(interaction) {
-    try {
-      await interaction.deferReply({ ephemeral: true });
+    return interaction.reply({
+      content: 'Which campus would you like to check?',
+      components: [buildCampusSelector('status')],
+      ephemeral: true,
+    });
+  },
 
+  async executeForCampus(interaction, campus) {
+    await interaction.deferUpdate();
+
+    try {
       const guildId = interaction.guildId;
-      const subscription = await db.getSubscriptionByGuildId(guildId);
+      const subscription = await db.getSubscriptionByGuildId(guildId, campus);
 
       if (!subscription || !subscription.is_active) {
         return interaction.editReply({
-          content:
-            '❌ **Not Subscribed**\nRun `/subscribe` in a channel to enable menu updates.',
+          content: `❌ **Not Subscribed to ${campus}**\nRun \`/subscribe\` in a channel to enable ${campus} Campus menu updates.`,
         });
       }
 
@@ -27,16 +35,22 @@ module.exports = {
         day: 'numeric',
       });
 
-      const statusMessage = `✅ **Menu Bot Status**
+      let statusMessage = `✅ **${campus} Campus Status**
 Channel: <#${subscription.channel_id}>
 Subscribed: ${subscribedDate}
 Next update: 9:00 AM JST (Mon-Fri)`;
 
-      return interaction.editReply({
-        content: statusMessage,
-      });
+      // Show other campus subscription info if it exists
+      const allSubs = await db.getSubscriptionsByGuildId(guildId);
+      const otherCampus = campus === 'Uzumasa' ? 'Kameoka' : 'Uzumasa';
+      const otherSub = allSubs.find(s => s.campus === otherCampus);
+      if (otherSub && otherSub.is_active) {
+        statusMessage += `\n\n📋 This server is also subscribed to **${otherCampus} Campus** in <#${otherSub.channel_id}>.`;
+      }
+
+      return interaction.editReply({ content: statusMessage });
     } catch (error) {
-      logger.error(`Error in status command: ${error.message}`);
+      logger.error(`Error in status command (${campus}): ${error.message}`);
       return interaction.editReply({
         content: '❌ Database error. Please try again later.',
       });

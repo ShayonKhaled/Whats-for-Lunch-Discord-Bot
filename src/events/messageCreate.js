@@ -3,6 +3,7 @@ const db = require('../db');
 const logger = require('../utils/logger');
 
 const OWNER_ID = process.env.BOT_ADMIN_ID;
+const HALAL_CAMPUS = process.env.HALAL_CAMPUS || 'Uzumasa';
 const UPLOAD_CHANNEL_NAME = 'halal-menu-upload';
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
@@ -86,7 +87,7 @@ module.exports = {
                 },
                 {
                   type: 'text',
-                  text: `This is a halal lunch menu poster for Uzumasa Campus cafeteria.
+                  text: `This is a halal lunch menu poster for ${HALAL_CAMPUS} Campus cafeteria.
 The menu lists meals available on Tuesdays and Thursdays for a given month.
 
 Extract every halal meal entry and return ONLY a JSON array, no markdown, no explanation.
@@ -151,7 +152,7 @@ Return only the JSON array.`,
 
         try {
           await db.addHalalMenuItem({
-            campus: 'Uzumasa',
+            campus: HALAL_CAMPUS,
             week_of: getWeekOf(item.menu_date),
             day_name: item.day_name,
             menu_date: item.menu_date,

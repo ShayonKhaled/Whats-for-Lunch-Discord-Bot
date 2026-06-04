@@ -1,16 +1,17 @@
 /**
- * Formats an array of menu items into Discord message chunks
- * Reuses logic from the n8n workflow-2 formatting node
+ * Formats an array of menu items into Discord message chunks.
  *
  * @param {object[]} items        - Menu rows from the DB.
  * @param {Map}      [ratingsMap] - Optional Map from getRatingsForDishes().
- *                                  Key: dish_name, Value: { avg, count }
- *                                  When provided, dishes with ratings show
- *                                  ⭐ avg (n) inline.
+ *                                   Key: dish_name, Value: { avg, count }
+ *                                   When provided, dishes with ratings show
+ *                                   ⭐ avg (n) inline.
+ * @param {string}   [campus]     - 'Uzumasa' (default) or 'Kameoka'.
  */
 
-// Hardcoded prices by subcategory (in yen)
-const PRICES = {
+// ── Uzumasa menu config ─────────────────────────────────────────────────────
+
+const UZUMASA_PRICES = {
   'Campus Lunch (1)': 330,
   'Campus Lunch (2)': 330,
   'Halal':            400,
@@ -24,27 +25,86 @@ const PRICES = {
   'Salad':             70,
 };
 
-// Subcategories where the price includes one free side dish or salad
-const SET_MEAL_SUBCATEGORIES = new Set(['Campus Lunch (1)', 'Campus Lunch (2)']);
+const UZUMASA_SET_MEAL_SUBCATEGORIES = new Set(['Campus Lunch (1)', 'Campus Lunch (2)']);
 
-const MENU_ORDER = [
+const UZUMASA_MENU_ORDER = [
   { key: 'Set Meals|||Campus Lunch (1)', emoji: '🥘' },
   { key: 'Set Meals|||Campus Lunch (2)', emoji: '🍲' },
-  { key: 'Halal|||Halal', emoji: '✅' },
-  { key: 'A La Carte|||A La Carte', emoji: '🍛' },
-  { key: 'A La Carte|||Curry Set', emoji: '🍛' },
-  { key: 'Noodles|||Ramen', emoji: '🍜' },
-  { key: 'Noodles|||Udon and Soba', emoji: '🍝' },
-  { key: 'Sides|||Side Dish A', emoji: '🥗' },
-  { key: 'Sides|||Side Dish B', emoji: '🥗' },
-  { key: 'Sides|||Side Dish C', emoji: '🥗' },
-  { key: 'Sides|||Salad', emoji: '🥬' },
+  { key: 'Halal|||Halal',               emoji: '✅' },
+  { key: 'A La Carte|||A La Carte',     emoji: '🍛' },
+  { key: 'A La Carte|||Curry Set',      emoji: '🍛' },
+  { key: 'Noodles|||Ramen',             emoji: '🍜' },
+  { key: 'Noodles|||Udon and Soba',     emoji: '🍝' },
+  { key: 'Sides|||Side Dish A',         emoji: '🥗' },
+  { key: 'Sides|||Side Dish B',         emoji: '🥗' },
+  { key: 'Sides|||Side Dish C',         emoji: '🥗' },
+  { key: 'Sides|||Salad',              emoji: '🥬' },
 ];
 
-function formatMenuMessage(items, ratingsMap = new Map()) {
+const UZUMASA_CATEGORY_EMOJIS = {
+  'Set Meals': '🍱',
+  'Halal':     '🟢',
+  'A La Carte':'🍛',
+  'Curry Set': '🍛',
+  'Noodles':   '🍜',
+  'Sides':     '🥗',
+};
+
+// ── Kameoka menu config ─────────────────────────────────────────────────────
+
+const KAMEOKA_MENU_ORDER = [
+  { key: 'Set|||A',                   emoji: '🍱' },
+  { key: 'Set|||B',                   emoji: '🍱' },
+  { key: 'Live Kitchen|||Live Kitchen', emoji: '🍳' },
+  { key: 'Curry|||A',                 emoji: '🍛' },
+  { key: 'Curry|||B',                 emoji: '🍛' },
+  { key: 'Curry|||C',                 emoji: '🍛' },
+  { key: 'Ramen|||Ramen',             emoji: '🍜' },
+  { key: 'Side Dish|||A',             emoji: '🥗' },
+  { key: 'Side Dish|||B',             emoji: '🥗' },
+  { key: 'Side Dish|||C',             emoji: '🥗' },
+  { key: 'Side Dish|||Salad',         emoji: '🥬' },
+];
+
+const KAMEOKA_CATEGORY_EMOJIS = {
+  'Set':          '🍱',
+  'Live Kitchen': '🍳',
+  'Curry':        '🍛',
+  'Ramen':        '🍜',
+  'Side Dish':    '🥗',
+};
+
+// ── Campus config lookup ────────────────────────────────────────────────────
+
+const CAMPUS_CONFIG = {
+  Uzumasa: {
+    menuOrder: UZUMASA_MENU_ORDER,
+    categoryEmojis: UZUMASA_CATEGORY_EMOJIS,
+    setMealSubcategories: UZUMASA_SET_MEAL_SUBCATEGORIES,
+    headerTitle: 'Uzumasa Campus',
+    priceLookup(item) { return UZUMASA_PRICES[item.subcategory] ?? null; },
+    showSetMealNote: true,
+    footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**\n\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*',
+  },
+  Kameoka: {
+    menuOrder: KAMEOKA_MENU_ORDER,
+    categoryEmojis: KAMEOKA_CATEGORY_EMOJIS,
+    setMealSubcategories: new Set(), // Kameoka doesn't have free-side-dish set meals
+    headerTitle: 'Kameoka Campus',
+    priceLookup(item) { return item.price ?? null; },  // from DB `price` column
+    showSetMealNote: false,
+    footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**',
+  },
+};
+
+// ── Core formatter ──────────────────────────────────────────────────────────
+
+function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
   if (!items || items.length === 0) {
     return ['⚠️ No menu found for today.'];
   }
+
+  const config = CAMPUS_CONFIG[campus] || CAMPUS_CONFIG.Uzumasa;
 
   const firstItem = items[0];
   const menuDate = firstItem.menu_date;
@@ -60,18 +120,8 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
     grouped[key].push(item);
   }
 
-  // Define category order and emojis
-  const categoryEmojis = {
-    'Set Meals': '🍱',
-    'Halal': '🟢',
-    'A La Carte': '🍛',
-    'Curry Set': '🍛',
-    'Noodles': '🍜',
-    'Sides': '🥗',
-  };
-
   const sections = new Map();
-  for (const { key, emoji } of MENU_ORDER) {
+  for (const { key, emoji } of config.menuOrder) {
     if (!grouped[key]) {
       continue;
     }
@@ -83,7 +133,7 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
 
     if (!sections.has(displayCategoryName)) {
       sections.set(displayCategoryName, {
-        emoji: categoryEmojis[displayCategoryName] || emoji || '🍴',
+        emoji: config.categoryEmojis[displayCategoryName] || emoji || '🍴',
         items: [],
       });
     }
@@ -97,18 +147,18 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
     });
   }
 
-  let message = `# Uzumasa Campus — ${dayName}, ${menuDate}\n\n`;
+  let message = `# ${config.headerTitle} — ${dayName}, ${menuDate}\n\n`;
   let lastCategory = null;
 
   for (const [displayCategoryName, section] of sections) {
     const sectionPrices = new Set(
       section.items
-        .map((item) => PRICES[item.subcategoryName])
+        .map((item) => config.priceLookup({ subcategory: item.subcategoryName, price: item.dishes[0].price }))
         .filter((price) => typeof price === 'number')
     );
     const sharedSectionPrice = sectionPrices.size === 1 ? [...sectionPrices][0] : null;
     const sectionPriceStr = sharedSectionPrice
-      ? `  ·  ¥${sharedSectionPrice}${SET_MEAL_SUBCATEGORIES.has(section.items[0].subcategoryName) ? ' (+ 1 side/salad)' : ''}`
+      ? `  ·  ¥${sharedSectionPrice}${config.showSetMealNote && config.setMealSubcategories.has(section.items[0].subcategoryName) ? ' (+ 1 side/salad)' : ''}`
       : '';
 
     // Category header
@@ -129,9 +179,9 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
       const subcategoryPriceStr = sharedSectionPrice
         ? ''
         : (() => {
-            const price = PRICES[item.subcategoryName];
-            const isSetMeal = SET_MEAL_SUBCATEGORIES.has(item.subcategoryName);
-            return price ? `  ·  ¥${price}${isSetMeal ? ' (+ 1 side/salad)' : ''}` : '';
+            const price = config.priceLookup({ subcategory: item.subcategoryName, price: item.dishes[0].price });
+            const isSetMeal = config.setMealSubcategories.has(item.subcategoryName);
+            return price ? `  ·  ¥${price}${config.showSetMealNote && isSetMeal ? ' (+ 1 side/salad)' : ''}` : '';
           })();
 
       if (showSubcategoryName) {
@@ -167,8 +217,7 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
   }
 
   message += '\n━━━━━━━━━━━━━━━━━━━━━━\n';
-  message += '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM** ';
-  message += '\n\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*';
+  message += config.footerText;
 
   // Split into chunks under 2000 chars (Discord limit)
   const chunks = [];
@@ -188,11 +237,12 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
   return chunks;
 }
 
-function getMenuOrderIndex(category, subcategory) {
-  return MENU_ORDER.findIndex((entry) => {
+function getMenuOrderIndex(category, subcategory, campus = 'Uzumasa') {
+  const config = CAMPUS_CONFIG[campus] || CAMPUS_CONFIG.Uzumasa;
+  return config.menuOrder.findIndex((entry) => {
     const [entryCategory, entrySubcategory] = entry.key.split('|||');
     return entryCategory === category && entrySubcategory === subcategory;
   });
 }
 
-module.exports = { formatMenuMessage, MENU_ORDER, getMenuOrderIndex };
+module.exports = { formatMenuMessage, getMenuOrderIndex };

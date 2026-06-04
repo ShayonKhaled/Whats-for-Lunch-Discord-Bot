@@ -54,11 +54,11 @@ function starLabel(n) {
  * If there are >25 dishes the list is paginated across multiple select menus
  * (Discord allows up to 5 ActionRows, so up to 125 dishes).
  */
-function buildDishSelects(menuDate, dishes) {
+function buildDishSelects(menuDate, dishes, campus) {
   const sorted = [...dishes]
     .sort((a, b) => {
-      const aIndex = getMenuOrderIndex(a.category, a.subcategory);
-      const bIndex = getMenuOrderIndex(b.category, b.subcategory);
+      const aIndex = getMenuOrderIndex(a.category, a.subcategory, campus);
+      const bIndex = getMenuOrderIndex(b.category, b.subcategory, campus);
 
       if (aIndex !== bIndex) {
         if (aIndex === -1) return 1;
@@ -90,7 +90,7 @@ function buildDishSelects(menuDate, dishes) {
     rows.push(
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`rate_dish_select:${menuDate}`)
+          .setCustomId(`rate_dish_select:${campus}:${menuDate}`)
           .setPlaceholder(placeholder)
           .addOptions(options)
       )
@@ -100,7 +100,7 @@ function buildDishSelects(menuDate, dishes) {
   return rows;
 }
 
-function buildStarSelect(menuDate, dishKey, existingRating = null) {
+function buildStarSelect(menuDate, dishKey, existingRating = null, campus) {
   const options = [1, 2, 3, 4, 5].map((n) => ({
     label: `${n} — ${starLabel(n)}`,
     value: String(n),
@@ -108,7 +108,7 @@ function buildStarSelect(menuDate, dishKey, existingRating = null) {
   }));
 
   // dishKey is a short integer — no risk of exceeding Discord's 100-char limit
-  const customId = `rate_stars_select:${menuDate}:${dishKey}`;
+  const customId = `rate_stars_select:${campus}:${menuDate}:${dishKey}`;
 
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
@@ -125,10 +125,12 @@ function buildStarSelect(menuDate, dishKey, existingRating = null) {
  * customId: "rate_menu_open:<menuDate>"
  */
 async function handleRateMenuOpen(interaction) {
-  const menuDate = interaction.customId.split(':')[1];
+  const parts = interaction.customId.split(':');
+  const campus = parts[1]; // 'Uzumasa' or 'Kameoka'
+  const menuDate = parts[2];
 
   try {
-    const items = await db.getMenuByDate(menuDate);
+    const items = await db.getMenuByDate(menuDate, campus);
     if (!items || items.length === 0) {
       return interaction.reply({
         content: '⚠️ No menu found for that date.',
@@ -144,7 +146,7 @@ async function handleRateMenuOpen(interaction) {
       return true;
     });
 
-    const dishRows = buildDishSelects(menuDate, uniqueDishes);
+    const dishRows = buildDishSelects(menuDate, uniqueDishes, campus);
 
     const content =
       dishRows.length > 1
@@ -170,7 +172,9 @@ async function handleRateMenuOpen(interaction) {
  * customId: "rate_dish_select:<menuDate>"
  */
 async function handleDishSelect(interaction) {
-  const menuDate = interaction.customId.split(':')[1];
+  const parts = interaction.customId.split(':');
+  const campus = parts[1]; // 'Uzumasa' or 'Kameoka'
+  const menuDate = parts[2];
   const dishName = interaction.values[0];
 
   try {
@@ -184,7 +188,7 @@ async function handleDishSelect(interaction) {
 
     // Store dish name in cache, use the short key in the star select's custom ID
     const dishKey = cacheDishName(dishName);
-    const starRow = buildStarSelect(menuDate, dishKey, existingRating);
+    const starRow = buildStarSelect(menuDate, dishKey, existingRating, campus);
 
     const alreadyNote = existingRating
       ? `\nYou previously rated this **${starLabel(existingRating)}** — selecting again will update it.`
@@ -209,9 +213,10 @@ async function handleDishSelect(interaction) {
  */
 async function handleStarSelect(interaction) {
   const parts = interaction.customId.split(':');
-  // parts[0] = "rate_stars_select", parts[1] = menuDate, parts[2] = dishKey
-  const menuDate = parts[1];
-  const dishKey = parts[2];
+  // parts[0] = "rate_stars_select", parts[1] = campus, parts[2] = menuDate, parts[3] = dishKey
+  const campus = parts[1];
+  const menuDate = parts[2];
+  const dishKey = parts[3];
   const dishName = dishNameCache.get(dishKey);
 
   if (!dishName) {
@@ -239,8 +244,8 @@ async function handleStarSelect(interaction) {
     return interaction.update({
       content:
         `### ✅ Rating saved!\n` +
-        `**${dishName}** — ${starLabel(rating)} (${rating}/5)\n\n` +
-        `_Rate another dish by running the interaction again from today's menu post._`,
+        `**${dishName}** — ${starLabel(rating)} (${rating}/5)  ·  *${campus}*\n\n` +
+        `_Rate another dish by running the interaction again from the menu post._`,
       components: [],
     });
   } catch (err) {

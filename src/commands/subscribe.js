@@ -1,8 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
-
-const ROLE_NAME = 'notify-menu';
+const { buildCampusSelector } = require('../interactions/campusSelector');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -33,46 +32,75 @@ module.exports = {
         });
       }
 
-      await interaction.deferReply();
+      return interaction.reply({
+        content: 'Which campus would you like to subscribe to?',
+        components: [buildCampusSelector('subscribe')],
+        ephemeral: true,
+      });
+    } catch (error) {
+      logger.error(`Error in subscribe command: ${error.message}`);
+      return interaction.reply({
+        content: '❌ Something went wrong. Please try again later.',
+        ephemeral: true,
+      });
+    }
+  },
 
+  async executeForCampus(interaction, campus) {
+    await interaction.deferUpdate();
+
+    try {
       const guild = interaction.guild;
       const guildId = guild.id;
       const guildName = guild.name;
       const channelId = interaction.channelId;
-      const channelName = interaction.channel.name;
+      const channel = interaction.channel;
+      const channelName = channel ? channel.name : 'unknown';
+      const roleName = `notify-menu-${campus.toLowerCase()}`;
 
-      // Find existing notify-menu role or create it
-      let role = guild.roles.cache.find((r) => r.name === ROLE_NAME);
+      // Find existing role or create it
+      let role = guild.roles.cache.find((r) => r.name === roleName);
 
       if (role) {
-        logger.info(`ℹ️ Role "${ROLE_NAME}" already exists in ${guildName} (${role.id})`);
+        logger.info(`ℹ️ Role "${roleName}" already exists in ${guildName} (${role.id})`);
       } else {
         role = await guild.roles.create({
-          name: ROLE_NAME,
+          name: roleName,
           mentionable: true,
-          reason: 'Created by Cafeteria Menu bot for daily menu notifications',
+          reason: `Created by Cafeteria Menu bot for ${campus} Campus daily menu notifications`,
         });
-        logger.info(`✅ Created role "${ROLE_NAME}" in ${guildName} (${role.id})`);
+        logger.info(`✅ Created role "${roleName}" in ${guildName} (${role.id})`);
       }
 
-      // Save subscription with role ID
-      await db.addSubscription(guildId, guildName, channelId, channelName, role.id);
+      // Save subscription with role ID and campus
+      await db.addSubscription(guildId, guildName, channelId, channelName, role.id, campus);
 
       logger.info(
-        `✅ Subscription added: ${guildName} (${guildId}) -> #${channelName} (${channelId}), role=${role.id}`
+        `✅ Subscription added: ${guildName} (${guildId}) -> #${channelName} (${channelId}), campus=${campus}, role=${role.id}`
       );
 
-      return interaction.editReply({
+      // Ephemeral confirmation
+      await interaction.editReply({
+        content: `✅ **Subscribed to ${campus} Campus!**`,
+      });
+
+      // Public confirmation visible to the channel
+      await interaction.followUp({
         content:
-          `✅ **Menu Bot Subscribed**\n` +
+          `✅ **${campus} Campus Menu Bot Subscribed**\n` +
           `Menu updates will be posted in <#${channelId}> every weekday at **9:00 AM JST**.\n\n` +
           `📣 Members can use \`/notify\` to opt in or out of the <@&${role.id}> ping.`,
+        ephemeral: false,
       });
     } catch (error) {
-      logger.error(`Error in subscribe command: ${error.message}`);
-      return interaction.editReply({
-        content: '❌ Something went wrong. Please try again later.',
-      });
+      logger.error(`Error in subscribe command (${campus}): ${error.message}`);
+      try {
+        await interaction.editReply({
+          content: '❌ Something went wrong. Please try again later.',
+        });
+      } catch {
+        // If editReply fails, the deferUpdate already handled the timeout
+      }
     }
   },
 };

@@ -6,6 +6,7 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const db = require('./db');
 const logger = require('./utils/logger');
 const { handleRatingInteraction } = require('./interactions/rateMenu');
+const { handleCampusSelection } = require('./interactions/campusSelector');
 const healthServer = require('./server');
 const { push: pingUptimeKuma } = require('./utils/uptimeKuma');
 
@@ -76,6 +77,12 @@ client.on('interactionCreate', async (interaction) => {
       logger.error(`Rating interaction error: ${err.message}`);
       // Fall through — don't crash the process over a rating failure
     }
+  }
+
+  // ── Campus selection buttons ──────────────────────────────────────────
+  if (interaction.isButton() && interaction.customId.startsWith('campus_select:')) {
+    await handleCampusSelection(interaction);
+    return;
   }
 
   // ── Slash commands ────────────────────────────────────────────────────────

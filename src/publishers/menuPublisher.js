@@ -12,104 +12,116 @@ async function publishMenu(client) {
   logger.info(`🔄 Menu publisher job started at ${now.toISOString()}`);
 
   try {
-    const menuItems = await db.getTodayMenu();
-
-    if (!menuItems || menuItems.length === 0) {
-      logger.warn('⚠️ No menu items found for today');
-      return;
-    }
-
-    logger.info(`📋 Found ${menuItems.length} menu items for today`);
-
-    // ── Fetch aggregate ratings for all dishes in today's menu ──────────────
-    const dishNames = [...new Set(menuItems.map((d) => d.dish_name))];
-    const ratingsMap = await db.getRatingsForDishes(dishNames);
-    const ratedCount = ratingsMap.size;
-    if (ratedCount > 0) {
-      logger.info(`⭐ Loaded ratings for ${ratedCount} previously-rated dish(es)`);
-    }
-
-    // ── Format menu (ratings injected inline where available) ────────────────
-    const messageChunks = formatMenuMessage(menuItems, ratingsMap);
-    logger.info(`📝 Formatted menu into ${messageChunks.length} Discord message chunk(s)`);
-
-    // ── Build the "Rate Menu" button ─────────────────────────────────────────
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const rateButton = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`rate_menu_open:${today}`)
-        .setLabel('⭐ Rate today\'s dishes')
-        .setStyle(ButtonStyle.Secondary)
-    );
 
+    // Get all active subscriptions (now per-campus)
     const subscriptions = await db.getActiveSubscriptions();
-    logger.info(`📤 Sending menu to ${subscriptions.length} subscribed guild(s)`);
+    logger.info(`📤 Found ${subscriptions.length} active subscription(s)`);
 
     if (subscriptions.length === 0) {
       logger.info('ℹ️ No active subscriptions, skipping delivery');
       return;
     }
 
+    // Group subscriptions by campus
+    const byCampus = {};
+    for (const sub of subscriptions) {
+      (byCampus[sub.campus] ||= []).push(sub);
+    }
+
     let successCount = 0;
     let skipCount = 0;
     let failCount = 0;
 
-    for (const subscription of subscriptions) {
-      try {
-        const { guild_id: guildId, channel_id: channelId, guild_name: guildName } = subscription;
+    for (const [campus, subs] of Object.entries(byCampus)) {
+      logger.info(`🍽️ Processing ${campus} Campus — ${subs.length} subscriber(s)`);
 
-        const alreadySent = await db.hasSuccessfulDelivery(guildId, today);
-        if (alreadySent) {
-          logger.info(`⏭️  Skipped ${guildName}: already sent today`);
-          skipCount++;
-          continue;
-        }
+      // Fetch this campus's menu ONCE
+      const menuItems = await db.getTodayMenu(campus);
 
-        const channel = await client.channels.fetch(channelId).catch(() => null);
-        if (!channel) {
-          logger.warn(`❌ Channel not found for ${guildName} (${channelId})`);
-          await db.logDelivery(guildId, channelId, today, 'failed', 'Channel not found');
+      if (!menuItems || menuItems.length === 0) {
+        logger.warn(`⚠️ No menu items found for ${campus} Campus today — skipping`);
+        continue;
+      }
+
+      logger.info(`📋 Found ${menuItems.length} menu items for ${campus} Campus`);
+
+      // Fetch aggregate ratings
+      const dishNames = [...new Set(menuItems.map((d) => d.dish_name))];
+      const ratingsMap = await db.getRatingsForDishes(dishNames);
+      if (ratingsMap.size > 0) {
+        logger.info(`⭐ Loaded ratings for ${ratingsMap.size} dish(es) from ${campus} Campus`);
+      }
+
+      // Format menu with campus-specific config
+      const messageChunks = formatMenuMessage(menuItems, ratingsMap, campus);
+      logger.info(`📝 Formatted ${campus} Campus menu into ${messageChunks.length} chunk(s)`);
+
+      // Campus-specific rate button
+      const rateButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`rate_menu_open:${campus}:${today}`)
+          .setLabel('⭐ Rate today\'s dishes')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      // Deliver to each subscriber of this campus
+      for (const subscription of subs) {
+        try {
+          const { guild_id: guildId, channel_id: channelId, guild_name: guildName } = subscription;
+
+          const alreadySent = await db.hasSuccessfulDelivery(guildId, campus, today);
+          if (alreadySent) {
+            logger.info(`⏭️  Skipped ${guildName} (${campus}): already sent today`);
+            skipCount++;
+            continue;
+          }
+
+          const channel = await client.channels.fetch(channelId).catch(() => null);
+          if (!channel) {
+            logger.warn(`❌ Channel not found for ${guildName} (${channelId})`);
+            await db.logDelivery(guildId, channelId, campus, today, 'failed', 'Channel not found');
+            failCount++;
+            continue;
+          }
+
+          const me = channel.guild.members.me;
+          if (!me || !channel.permissionsFor(me).has('SendMessages')) {
+            logger.warn(`❌ No permission to send in ${guildName}/#${channel.name}`);
+            await db.logDelivery(guildId, channelId, campus, today, 'failed', 'Missing SendMessages permission');
+            failCount++;
+            continue;
+          }
+
+          const roleId = subscription.role_id;
+
+          for (let i = 0; i < messageChunks.length; i++) {
+            const isFirst = i === 0;
+
+            const menuContent = isFirst && roleId
+              ? `<@&${roleId}>\n${messageChunks[i]}`
+              : messageChunks[i];
+
+            const content = isFirst
+              ? `${menuContent}\n\n## **Tap below to rate the menu**`
+              : menuContent;
+
+            await channel.send({
+              content,
+              components: isFirst ? [rateButton] : [],
+            });
+          }
+
+          await db.logDelivery(guildId, channelId, campus, today, 'success', null);
+          logger.info(`✅ Sent ${campus} Campus menu to ${guildName}/#${channel.name}`);
+          successCount++;
+        } catch (error) {
+          logger.error(`❌ Error sending ${campus} menu to guild ${subscription.guild_name}: ${error.message}`);
+          await db
+            .logDelivery(subscription.guild_id, subscription.channel_id, campus, today, 'failed', error.message)
+            .catch((err) => logger.error(`Failed to log delivery error: ${err.message}`));
           failCount++;
-          continue;
         }
-
-        const me = channel.guild.members.me;
-        if (!me || !channel.permissionsFor(me).has('SendMessages')) {
-          logger.warn(`❌ No permission to send in ${guildName}/#${channel.name}`);
-          await db.logDelivery(guildId, channelId, today, 'failed', 'Missing SendMessages permission');
-          failCount++;
-          continue;
-        }
-
-        const roleId = subscription.role_id;
-        const lastChunkIndex = messageChunks.length - 1;
-
-        for (let i = 0; i < messageChunks.length; i++) {
-          const isFirst = i === 0;
-
-          const menuContent = isFirst && roleId
-            ? `<@&${roleId}>\n${messageChunks[i]}`
-            : messageChunks[i];
-
-          const content = isFirst
-            ? `${menuContent}\n\n## **Tap below to rate the menu**`
-            : menuContent;
-
-          await channel.send({
-            content,
-            components: isFirst ? [rateButton] : [],
-          });
-        }
-
-        await db.logDelivery(guildId, channelId, today, 'success', null);
-        logger.info(`✅ Sent menu to ${guildName}/#${channel.name}`);
-        successCount++;
-      } catch (error) {
-        logger.error(`❌ Error sending to guild ${subscription.guild_name}: ${error.message}`);
-        await db
-          .logDelivery(subscription.guild_id, subscription.channel_id, today, 'failed', error.message)
-          .catch((err) => logger.error(`Failed to log delivery error: ${err.message}`));
-        failCount++;
       }
     }
 

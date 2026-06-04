@@ -34,17 +34,17 @@ async function initConnection() {
   return pool;
 }
 
-async function addSubscription(guildId, guildName, channelId, channelName, roleId) {
+async function addSubscription(guildId, guildName, channelId, channelName, roleId, campus) {
   try {
     const result = await pool.query(
-      `INSERT INTO guild_subscriptions (guild_id, guild_name, channel_id, channel_name, role_id)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (guild_id) DO UPDATE
+      `INSERT INTO guild_subscriptions (guild_id, guild_name, channel_id, channel_name, role_id, campus)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (guild_id, campus) DO UPDATE
        SET channel_id = $3, channel_name = $4, role_id = $5, updated_at = NOW()
        RETURNING *`,
-      [guildId, guildName, channelId, channelName, roleId]
+      [guildId, guildName, channelId, channelName, roleId, campus]
     );
-    logger.info(`✅ Added/updated subscription: guild=${guildId}, channel=${channelId}, role=${roleId}`);
+    logger.info(`✅ Added/updated subscription: guild=${guildId}, campus=${campus}, channel=${channelId}, role=${roleId}`);
     return result.rows[0];
   } catch (err) {
     logger.error(`Error adding subscription: ${err.message}`);
@@ -52,13 +52,15 @@ async function addSubscription(guildId, guildName, channelId, channelName, roleI
   }
 }
 
-async function removeSubscription(guildId) {
+async function removeSubscription(guildId, campus) {
   try {
     const result = await pool.query(
-      `UPDATE guild_subscriptions SET is_active = FALSE, updated_at = NOW() WHERE guild_id = $1 RETURNING *`,
-      [guildId]
+      `UPDATE guild_subscriptions SET is_active = FALSE, updated_at = NOW()
+       WHERE guild_id = $1 AND campus = $2 AND is_active = TRUE
+       RETURNING *`,
+      [guildId, campus]
     );
-    logger.info(`✅ Removed subscription: guild=${guildId}`);
+    logger.info(`✅ Removed subscription: guild=${guildId}, campus=${campus}`);
     return result.rows[0] || null;
   } catch (err) {
     logger.error(`Error removing subscription: ${err.message}`);
@@ -79,12 +81,25 @@ async function getActiveSubscriptions() {
   }
 }
 
-async function getTodayMenu() {
+async function getSubscriptionsByGuildId(guildId) {
   try {
     const result = await pool.query(
-      `SELECT * FROM menu_items WHERE menu_date::date = CURRENT_DATE ORDER BY category, subcategory`
+      `SELECT * FROM guild_subscriptions WHERE guild_id = $1 AND is_active = TRUE`
     );
-    logger.debug(`Fetched ${result.rows.length} menu items for today`);
+    return result.rows;
+  } catch (err) {
+    logger.error(`Error fetching subscriptions for guild: ${err.message}`);
+    throw err;
+  }
+}
+
+async function getTodayMenu(campus) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM menu_items WHERE campus = $1 AND menu_date::date = CURRENT_DATE ORDER BY category, subcategory`,
+      [campus]
+    );
+    logger.debug(`Fetched ${result.rows.length} menu items for today (${campus})`);
     return result.rows;
   } catch (err) {
     logger.error(`Error fetching today's menu: ${err.message}`);
@@ -92,13 +107,13 @@ async function getTodayMenu() {
   }
 }
 
-async function getMenuByDate(dateText) {
+async function getMenuByDate(dateText, campus) {
   try {
     const result = await pool.query(
-      `SELECT * FROM menu_items WHERE menu_date::date = $1::date ORDER BY category, subcategory`,
-      [dateText]
+      `SELECT * FROM menu_items WHERE campus = $2 AND menu_date::date = $1::date ORDER BY category, subcategory`,
+      [dateText, campus]
     );
-    logger.debug(`Fetched ${result.rows.length} menu items for date ${dateText}`);
+    logger.debug(`Fetched ${result.rows.length} menu items for date ${dateText} (${campus})`);
     return result.rows;
   } catch (err) {
     logger.error(`Error fetching menu by date: ${err.message}`);
@@ -106,14 +121,16 @@ async function getMenuByDate(dateText) {
   }
 }
 
-async function getNextMenu() {
+async function getNextMenu(campus) {
   try {
     const nextRes = await pool.query(
       `SELECT menu_date FROM menu_items
-       WHERE (menu_date::date > CURRENT_DATE)
+       WHERE campus = $1
+         AND (menu_date::date > CURRENT_DATE)
          AND EXTRACT(ISODOW FROM menu_date::date) BETWEEN 1 AND 5
        ORDER BY menu_date::date ASC
-       LIMIT 1`
+       LIMIT 1`,
+      [campus]
     );
 
     if (!nextRes.rows || nextRes.rows.length === 0) {
@@ -122,11 +139,11 @@ async function getNextMenu() {
 
     const menuDate = nextRes.rows[0].menu_date;
     const itemsRes = await pool.query(
-      `SELECT * FROM menu_items WHERE menu_date::date = $1::date ORDER BY category, subcategory`,
-      [menuDate]
+      `SELECT * FROM menu_items WHERE campus = $2 AND menu_date::date = $1::date ORDER BY category, subcategory`,
+      [menuDate, campus]
     );
 
-    logger.debug(`Fetched ${itemsRes.rows.length} menu items for next date ${menuDate}`);
+    logger.debug(`Fetched ${itemsRes.rows.length} menu items for next date ${menuDate} (${campus})`);
     return { menuDate, items: itemsRes.rows };
   } catch (err) {
     logger.error(`Error fetching next menu: ${err.message}`);
@@ -134,11 +151,11 @@ async function getNextMenu() {
   }
 }
 
-async function hasSuccessfulDelivery(guildId, menuDate) {
+async function hasSuccessfulDelivery(guildId, campus, menuDate) {
   try {
     const result = await pool.query(
-      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND menu_date = $2 AND status = 'success'`,
-      [guildId, menuDate]
+      `SELECT 1 FROM bot_delivery_log WHERE guild_id = $1 AND campus = $2 AND menu_date = $3 AND status = 'success'`,
+      [guildId, campus, menuDate]
     );
     return result.rows.length > 0;
   } catch (err) {
@@ -147,29 +164,29 @@ async function hasSuccessfulDelivery(guildId, menuDate) {
   }
 }
 
-async function logDelivery(guildId, channelId, menuDate, status, errorMessage) {
+async function logDelivery(guildId, channelId, campus, menuDate, status, errorMessage) {
   try {
     await pool.query(
-      `INSERT INTO bot_delivery_log (guild_id, channel_id, menu_date, status, error_message)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (guild_id, menu_date) DO UPDATE
+      `INSERT INTO bot_delivery_log (guild_id, channel_id, campus, menu_date, status, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (guild_id, campus, menu_date) DO UPDATE
          SET status = EXCLUDED.status,
              error_message = EXCLUDED.error_message,
              delivered_at = NOW()`,
-      [guildId, channelId, menuDate, status, errorMessage]
+      [guildId, channelId, campus, menuDate, status, errorMessage]
     );
-    logger.debug(`📝 Logged delivery: guild=${guildId}, status=${status}`);
+    logger.debug(`📝 Logged delivery: guild=${guildId}, campus=${campus}, status=${status}`);
   } catch (err) {
     logger.error(`Error logging delivery: ${err.message}`);
     throw err;
   }
 }
 
-async function getSubscriptionByGuildId(guildId) {
+async function getSubscriptionByGuildId(guildId, campus) {
   try {
     const result = await pool.query(
-      `SELECT * FROM guild_subscriptions WHERE guild_id = $1`,
-      [guildId]
+      `SELECT * FROM guild_subscriptions WHERE guild_id = $1 AND campus = $2`,
+      [guildId, campus]
     );
     return result.rows[0] || null;
   } catch (err) {
@@ -287,6 +304,7 @@ module.exports = {
   addSubscription,
   removeSubscription,
   getActiveSubscriptions,
+  getSubscriptionsByGuildId,
   getTodayMenu,
   getMenuByDate,
   getNextMenu,

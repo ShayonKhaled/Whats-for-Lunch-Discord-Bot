@@ -18,20 +18,23 @@ CREATE TABLE IF NOT EXISTS menu_items (
   protein     NUMERIC(5,1),
   fat         NUMERIC(5,1),
   sodium      NUMERIC(5,1),
+  price       INTEGER,                       -- yen, nullable. Populated for Kameoka, NULL for Uzumasa.
   created_at  TIMESTAMP DEFAULT NOW(),
   CONSTRAINT unique_dish UNIQUE (campus, menu_date, dish_name, subcategory)
 );
 
 -- Guild subscriptions managed by the bot slash commands.
 CREATE TABLE IF NOT EXISTS guild_subscriptions (
-  guild_id        VARCHAR(20) PRIMARY KEY,
+  guild_id        VARCHAR(20) NOT NULL,
   guild_name      TEXT NOT NULL,
   channel_id      VARCHAR(20) NOT NULL,
   channel_name    TEXT,
   role_id         VARCHAR(20),             -- ID of the auto-created notify-menu role
+  campus          VARCHAR(50) NOT NULL DEFAULT 'Uzumasa',  -- 'Uzumasa' or 'Kameoka'
   is_active       BOOLEAN DEFAULT TRUE,
   subscribed_at   TIMESTAMP DEFAULT NOW(),
-  updated_at      TIMESTAMP DEFAULT NOW()
+  updated_at      TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (guild_id, campus)
 );
 
 -- Prevents duplicate daily menu posts.
@@ -39,11 +42,12 @@ CREATE TABLE IF NOT EXISTS bot_delivery_log (
   id            SERIAL PRIMARY KEY,
   guild_id      VARCHAR(20) NOT NULL,
   channel_id    VARCHAR(20) NOT NULL,
+  campus        VARCHAR(50) NOT NULL DEFAULT 'Uzumasa',  -- 'Uzumasa' or 'Kameoka'
   menu_date     TEXT NOT NULL,
   status        TEXT NOT NULL,             -- 'success', 'failed', 'skipped'
   error_message TEXT,
   delivered_at  TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT unique_delivery UNIQUE (guild_id, menu_date)
+  CONSTRAINT unique_delivery UNIQUE (guild_id, campus, menu_date)
 );
 
 -- Dish ratings submitted via the interactive rating flow (v1.0.3).

@@ -27,6 +27,20 @@ const PRICES = {
 // Subcategories where the price includes one free side dish or salad
 const SET_MEAL_SUBCATEGORIES = new Set(['Campus Lunch (1)', 'Campus Lunch (2)']);
 
+const MENU_ORDER = [
+  { key: 'Set Meals|||Campus Lunch (1)', emoji: '🥘' },
+  { key: 'Set Meals|||Campus Lunch (2)', emoji: '🍲' },
+  { key: 'Halal|||Halal', emoji: '✅' },
+  { key: 'A La Carte|||A La Carte', emoji: '🍛' },
+  { key: 'A La Carte|||Curry Set', emoji: '🍛' },
+  { key: 'Noodles|||Ramen', emoji: '🍜' },
+  { key: 'Noodles|||Udon and Soba', emoji: '🍝' },
+  { key: 'Sides|||Side Dish A', emoji: '🥗' },
+  { key: 'Sides|||Side Dish B', emoji: '🥗' },
+  { key: 'Sides|||Side Dish C', emoji: '🥗' },
+  { key: 'Sides|||Salad', emoji: '🥬' },
+];
+
 function formatMenuMessage(items, ratingsMap = new Map()) {
   if (!items || items.length === 0) {
     return ['⚠️ No menu found for today.'];
@@ -47,20 +61,6 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
   }
 
   // Define category order and emojis
-  const order = [
-    { key: 'Set Meals|||Campus Lunch (1)', emoji: '🥘' },
-    { key: 'Set Meals|||Campus Lunch (2)', emoji: '🍲' },
-    { key: 'Halal|||Halal', emoji: '✅' },
-    { key: 'A La Carte|||A La Carte', emoji: '🍛' },
-    { key: 'A La Carte|||Curry Set', emoji: '🍛' },
-    { key: 'Noodles|||Ramen', emoji: '🍜' },
-    { key: 'Noodles|||Udon and Soba', emoji: '🍝' },
-    { key: 'Sides|||Side Dish A', emoji: '🥗' },
-    { key: 'Sides|||Side Dish B', emoji: '🥗' },
-    { key: 'Sides|||Side Dish C', emoji: '🥗' },
-    { key: 'Sides|||Salad', emoji: '🥬' },
-  ];
-
   const categoryEmojis = {
     'Set Meals': '🍱',
     'Halal': '🟢',
@@ -71,7 +71,7 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
   };
 
   const sections = new Map();
-  for (const { key, emoji } of order) {
+  for (const { key, emoji } of MENU_ORDER) {
     if (!grouped[key]) {
       continue;
     }
@@ -187,4 +187,11 @@ function formatMenuMessage(items, ratingsMap = new Map()) {
   return chunks;
 }
 
-module.exports = { formatMenuMessage };
+function getMenuOrderIndex(category, subcategory) {
+  return MENU_ORDER.findIndex((entry) => {
+    const [entryCategory, entrySubcategory] = entry.key.split('|||');
+    return entryCategory === category && entrySubcategory === subcategory;
+  });
+}
+
+module.exports = { formatMenuMessage, MENU_ORDER, getMenuOrderIndex };

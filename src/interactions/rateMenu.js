@@ -20,6 +20,7 @@ const {
 } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
+const { getMenuOrderIndex } = require('../utils/formatMenu');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,11 +33,24 @@ function starLabel(n) {
  * Groups them as "Category — Dish Name" so users know what they're rating.
  */
 function buildDishSelect(menuDate, dishes) {
-  const options = dishes.map((d) => ({
-    label: d.dish_name.length > 100 ? d.dish_name.slice(0, 97) + '…' : d.dish_name,
-    description: `${d.category}${d.subcategory !== d.category ? ' · ' + d.subcategory : ''}`,
-    value: d.dish_name.slice(0, 100), // select option values max 100 chars
-  }));
+  const options = [...dishes]
+    .sort((a, b) => {
+      const aIndex = getMenuOrderIndex(a.category, a.subcategory);
+      const bIndex = getMenuOrderIndex(b.category, b.subcategory);
+
+      if (aIndex !== bIndex) {
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      }
+
+      return a.dish_name.localeCompare(b.dish_name);
+    })
+    .map((d) => ({
+      label: d.dish_name.length > 100 ? d.dish_name.slice(0, 97) + '…' : d.dish_name,
+      description: `${d.category}${d.subcategory !== d.category ? ' · ' + d.subcategory : ''}`,
+      value: d.dish_name.slice(0, 100), // select option values max 100 chars
+    }));
 
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()

@@ -47,6 +47,11 @@ A Discord bot that broadcasts the daily Uzumasa Campus cafeteria menu to subscri
          │         ├─ /preview     → ephemeral: today's menu from DB
          │         └─ /nextmenu    → ephemeral: next available weekday's menu from DB
          │
+         ├─ Rating Interactions (buttons + select menus)
+         │         ├─ "Rate today's dishes" button on every menu post
+         │         ├─ Dish picker → star rating select → upsert into dish_ratings
+         │         └─ Aggregate ratings shown as ⭐ avg (n) next to recurring dishes
+         │
          └─ #halal-menu-upload channel (owner only)
                    ├─ messageCreate event → receives image attachment
                    ├─ Claude Vision API → extracts dish names, dates, day names as JSON
@@ -108,6 +113,21 @@ CREATE TABLE bot_delivery_log (
   error_message TEXT,
   delivered_at  TIMESTAMP DEFAULT NOW(),
   CONSTRAINT unique_delivery UNIQUE (guild_id, menu_date)
+);
+```
+
+**Table:** `dish_ratings` *(stores user star ratings per dish per day)*
+
+```sql
+CREATE TABLE dish_ratings (
+  id          SERIAL PRIMARY KEY,
+  guild_id    BIGINT NOT NULL,
+  user_id     BIGINT NOT NULL,
+  menu_date   TEXT NOT NULL,               -- 'YYYY-MM-DD'
+  dish_name   TEXT NOT NULL,
+  rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  rated_at    TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT unique_rating UNIQUE (dish_name, menu_date, guild_id, user_id)
 );
 ```
 
@@ -208,6 +228,8 @@ The bot logs `✅ Bot is online and ready!` when connected.
 | `/preview` | Everyone | Ephemeral view of today's menu. |
 | `/nextmenu` | Everyone | Ephemeral view of the next available weekday's menu. |
 
+Daily menu posts include a **"⭐ Rate today's dishes"** button. Tapping it opens an ephemeral flow where users pick a dish and rate it 1–5 stars. Previously-rated dishes show a star badge (e.g. `⭐ 4.2 (12)`) next to their name in future menus.
+
 ---
 
 ## Configuration
@@ -257,6 +279,8 @@ wfl-bot/
 │   ├── utils/
 │   │   ├── formatMenu.js          # Groups items by category, builds Discord markdown chunks
 │   │   └── logger.js              # Winston logger: file and console transports
+│   ├── interactions/
+│   │   └── rateMenu.js            # Rating button/select-menu interaction handler
 │   └── events/
 │       ├── ready.js               # Bot ready: starts the publisher scheduler
 │       └── messageCreate.js       # Halal menu image upload handler
@@ -300,11 +324,10 @@ sudo journalctl -u campus-lunch-discord-bot -f
 
 ## Known Limitations & Planned Improvements
 
-1. **`OWNER_ID` for halal upload is hardcoded** — should be moved to an environment variable
-2. **No rate limiting on halal uploads** — a bad actor in the upload channel could spam Claude API calls
-3. **Global command propagation is slow** — Discord takes up to 1 hour; use guild commands during development
-4. **Delivery log blocks same-day redelivery on channel change** — if a guild changes channels mid-day, the success log prevents re-posting until the next day
-5. **No web dashboard** — subscription management is entirely through slash commands; an admin panel would help for multi-guild oversight
+1. **No rate limiting on halal uploads** — a bad actor in the upload channel could spam Claude API calls
+2. **Global command propagation is slow** — Discord takes up to 1 hour; use guild commands during development
+3. **Delivery log blocks same-day redelivery on channel change** — if a guild changes channels mid-day, the success log prevents re-posting until the next day
+4. **No web dashboard** — subscription management is entirely through slash commands; an admin panel would help for multi-guild oversight
 
 ---
 

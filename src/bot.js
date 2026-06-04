@@ -6,6 +6,8 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const db = require('./db');
 const logger = require('./utils/logger');
 const { handleRatingInteraction } = require('./interactions/rateMenu');
+const healthServer = require('./server');
+const { push: pingUptimeKuma } = require('./utils/uptimeKuma');
 
 const client = new Client({
   intents: [
@@ -122,6 +124,18 @@ async function start() {
   try {
     await db.initConnection();
     await client.login(process.env.DISCORD_BOT_TOKEN);
+
+    // Start health endpoint for Uptime Kuma monitoring
+    healthServer.start(client);
+
+    // Heartbeat ping every 5 minutes so Uptime Kuma knows the bot is alive
+    const HEARTBEAT_MS = 5 * 60 * 1000;
+    setInterval(() => {
+      pingUptimeKuma(process.env.UPTIME_KUMA_HEARTBEAT_URL, 'heartbeat');
+    }, HEARTBEAT_MS);
+    // Fire one immediately so Uptime Kuma registers it right away
+    pingUptimeKuma(process.env.UPTIME_KUMA_HEARTBEAT_URL, 'heartbeat');
+
   } catch (error) {
     logger.error(`❌ Failed to start bot: ${error.message}`);
     process.exit(1);

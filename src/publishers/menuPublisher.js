@@ -3,6 +3,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { formatMenuMessage } = require('../utils/formatMenu');
+const { push: pingUptimeKuma } = require('../utils/uptimeKuma');
 
 let scheduledJob = null;
 
@@ -113,6 +114,13 @@ async function publishMenu(client) {
     }
 
     logger.info(`📊 Publisher summary: ${successCount} sent, ${skipCount} skipped, ${failCount} failed`);
+
+    // Ping Uptime Kuma — tells it the menu publisher ran, with delivery counts as query params
+    const menuPushUrl = process.env.UPTIME_KUMA_MENU_PUSH_URL;
+    if (menuPushUrl) {
+      const url = `${menuPushUrl}?status=up&msg=${successCount}%20sent%2C%20${failCount}%20failed`;
+      pingUptimeKuma(url, 'menu-delivery');
+    }
 
     if (failCount > 0 && process.env.BOT_ADMIN_ID) {
       try {

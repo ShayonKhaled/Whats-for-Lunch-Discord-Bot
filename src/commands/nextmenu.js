@@ -41,14 +41,12 @@ module.exports = {
       const lastIndex = chunks.length - 1;
       await interaction.editReply({
         content: chunks[0],
-        components: lastIndex === 0 ? [rateButton] : [],
+        components: [rateButton],
       });
 
       for (let i = 1; i < chunks.length; i++) {
-        const isLast = i === lastIndex;
         await interaction.followUp({
           content: chunks[i],
-          components: isLast ? [rateButton] : [],
           ephemeral: true,
         });
       }

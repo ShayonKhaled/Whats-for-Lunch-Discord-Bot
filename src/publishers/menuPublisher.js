@@ -91,9 +91,9 @@ async function publishMenu(client) {
             ? `<@&${roleId}>\n${messageChunks[i]}`
             : messageChunks[i];
 
-          // Attach the rate button only to the final chunk so it sits
-          // directly below the closing divider line — not mid-menu.
-          const components = isLast ? [rateButton] : [];
+          // Attach the rate button to the first chunk so it appears at the top
+          // of the delivered menu instead of after the full list.
+          const components = isFirst ? [rateButton] : [];
 
           await channel.send({ content, components });
         }

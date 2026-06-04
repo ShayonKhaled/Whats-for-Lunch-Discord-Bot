@@ -2,7 +2,7 @@
 const db = require('../db');
 const logger = require('../utils/logger');
 
-const OWNER_ID = '722771046125797428';
+const OWNER_ID = process.env.BOT_ADMIN_ID;
 const UPLOAD_CHANNEL_NAME = 'halal-menu-upload';
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
@@ -16,6 +16,12 @@ module.exports = {
 
     // Only respond in the designated upload channel
     if (message.channel.name !== UPLOAD_CHANNEL_NAME) return;
+
+    // Require BOT_ADMIN_ID to be configured
+    if (!OWNER_ID) {
+      logger.warn('BOT_ADMIN_ID not set — halal menu upload is disabled.');
+      return;
+    }
 
     // Only respond to the owner
     if (message.author.id !== OWNER_ID) {

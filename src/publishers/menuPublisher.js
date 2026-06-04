@@ -83,19 +83,21 @@ async function publishMenu(client) {
         const roleId = subscription.role_id;
         const lastChunkIndex = messageChunks.length - 1;
 
-        await channel.send({
-          content: 'Tap below to rate the menu',
-          components: [rateButton],
-        });
-
         for (let i = 0; i < messageChunks.length; i++) {
           const isFirst = i === 0;
 
-          const content = isFirst && roleId
+          const menuContent = isFirst && roleId
             ? `<@&${roleId}>\n${messageChunks[i]}`
             : messageChunks[i];
 
-          await channel.send({ content });
+          const content = isFirst
+            ? `${menuContent}\n\nTap below to rate the menu`
+            : menuContent;
+
+          await channel.send({
+            content,
+            components: isFirst ? [rateButton] : [],
+          });
         }
 
         await db.logDelivery(guildId, channelId, today, 'success', null);

@@ -39,13 +39,8 @@ module.exports = {
       );
 
       await interaction.editReply({
-        content: 'Tap below to rate the menu',
+        content: `${chunks[0]}\n\nTap below to rate the menu`,
         components: [rateButton],
-      });
-
-      await interaction.followUp({
-        content: chunks[0],
-        ephemeral: true,
       });
 
       for (let i = 1; i < chunks.length; i++) {

@@ -17,6 +17,7 @@ const UZUMASA_PRICES = {
   'Halal':            400,
   'A La Carte':       330,
   'Curry Set':        330,
+  'Curry':            330,
   'Ramen':            250,
   'Udon and Soba':    200,
   'Side Dish A':       70,
@@ -36,6 +37,7 @@ const UZUMASA_MENU_ORDER = [
   { key: 'Curry|||Curry Set',           emoji: '🍛' },
   { key: 'Noodles|||Ramen',             emoji: '🍜' },
   { key: 'Noodles|||Udon and Soba',     emoji: '🍝' },
+  { key: 'Curry|||Curry',               emoji: '🍛' },
   { key: 'Sides|||Side Dish A',         emoji: '🥗' },
   { key: 'Sides|||Side Dish B',         emoji: '🥗' },
   { key: 'Sides|||Side Dish C',         emoji: '🥗' },
@@ -47,6 +49,7 @@ const UZUMASA_CATEGORY_EMOJIS = {
   'Halal':     '🟢',
   'A La Carte':'🍛',
   'Curry Set': '🍛',
+  'Curry':     '🍛',
   'Noodles':   '🍜',
   'Sides':     '🥗',
 };

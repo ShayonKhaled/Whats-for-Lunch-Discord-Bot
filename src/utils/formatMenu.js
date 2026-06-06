@@ -33,6 +33,7 @@ const UZUMASA_MENU_ORDER = [
   { key: 'Halal|||Halal',               emoji: '✅' },
   { key: 'A La Carte|||A La Carte',     emoji: '🍛' },
   { key: 'A La Carte|||Curry Set',      emoji: '🍛' },
+  { key: 'Curry|||Curry Set',           emoji: '🍛' },
   { key: 'Noodles|||Ramen',             emoji: '🍜' },
   { key: 'Noodles|||Udon and Soba',     emoji: '🍝' },
   { key: 'Sides|||Side Dish A',         emoji: '🥗' },
@@ -132,6 +133,8 @@ function displaySubcategoryName(entry, config) {
 
 // ── Core formatter ──────────────────────────────────────────────────────────
 
+const logger = require('./logger');
+
 function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
   if (!items || items.length === 0) {
     return ['⚠️ No menu found for today.'];
@@ -152,6 +155,21 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
     }
     grouped[key].push(item);
   }
+
+  // ── Debug: log every item so we can see what the DB actually returned ──────
+  logger.debug(`[formatMenu] campus=${campus} date=${items[0]?.menu_date} totalItems=${items.length}`);
+  for (const item of items) {
+    logger.debug(`[formatMenu]   item: campus=${item.campus} category="${item.category}" subcategory="${item.subcategory}" dish="${item.dish_name}"`);
+  }
+  const groupedKeys = Object.keys(grouped);
+  const menuOrderKeys = config.menuOrder.map(e => e.key);
+  const orphanedKeys = groupedKeys.filter(k => !menuOrderKeys.includes(k));
+  logger.debug(`[formatMenu] grouped keys: ${JSON.stringify(groupedKeys)}`);
+  logger.debug(`[formatMenu] menuOrder keys: ${JSON.stringify(menuOrderKeys)}`);
+  if (orphanedKeys.length > 0) {
+    logger.warn(`[formatMenu] ORPHANED (will be dropped): ${JSON.stringify(orphanedKeys)}`);
+  }
+  // ── End debug ──────────────────────────────────────────────────────────────
 
   // Build ordered sections from menuOrder
   const sections = new Map();

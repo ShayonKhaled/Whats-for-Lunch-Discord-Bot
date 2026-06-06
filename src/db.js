@@ -145,6 +145,14 @@ async function getNextMenu(campus) {
     );
 
     logger.debug(`Fetched ${itemsRes.rows.length} menu items for next date ${menuDate} (${campus})`);
+    if (itemsRes.rows.length > 0) {
+      const cats = {};
+      for (const r of itemsRes.rows) {
+        const k = `${r.category}|||${r.subcategory}`;
+        cats[k] = (cats[k] || 0) + 1;
+      }
+      logger.debug(`[getNextMenu] items by category|||subcategory: ${JSON.stringify(cats)}`);
+    }
     return { menuDate, items: itemsRes.rows };
   } catch (err) {
     logger.error(`Error fetching next menu: ${err.message}`);

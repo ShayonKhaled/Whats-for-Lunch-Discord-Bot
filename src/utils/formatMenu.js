@@ -113,7 +113,7 @@ const CAMPUS_CONFIG = {
 
 const ALLERGY_DISCLAIMER =
   '⚠️ *If you have any food allergies, please cross-check the allergens from the menu inside the cafeteria, as there may be unintended discrepancies here.*\n' +
-  '*食物アレルギーをお持ちの方は、誤記載の可能性もあるため、学内の掲示メニューでもアレルゲンをご確認ください。*';
+  '*食物アレルギーをお持ちの方は、誤記載の可能性もあるため、食堂の掲示メニューでもアレルゲンをご確認ください。*';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

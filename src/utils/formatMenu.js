@@ -222,6 +222,7 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
 
     // Category header
     if (dCat !== lastCategory) {
+      if (lastCategory !== null) message += '\n';
       message += `## ${section.emoji} ${dCat}${sectionPriceStr}\n`;
       lastCategory = dCat;
     }
@@ -265,6 +266,8 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
         if (dish.allergens) {
           message += `> ⚠️ *${dish.allergens}*\n`;
         }
+
+        message += '\n';
       }
     }
   }

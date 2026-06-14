@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
  
+## [1.1.1] - 2026-06-14
+- Halal menu upload replaced by n8n workflow.
+- Removed: halal image upload event handler, `addHalalMenuItem()` in db.js, `@napi-rs/canvas` dependency, `ANTHROPIC_API_KEY` from env.
+- n8n workflow `workflow-1-menu-scraper-halal` (Campus-Lunch-Pipeline) now extracts Halal menus from weekly email PDFs and inserts directly into `menu_items`.
+
 ## [1.1.0] - 2026-06-05
 - Multi-campus support: Uzumasa and Kameoka campuses
 - Campus selector buttons on all slash commands (/subscribe, /unsubscribe, /preview, /nextmenu, /status, /notify)

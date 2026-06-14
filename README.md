@@ -17,7 +17,7 @@ A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria men
 **External Services**
 - PostgreSQL — shared `campus_lunch` database populated by the pipeline; read-only from the bot's perspective
 - Discord Bot API — slash commands and message delivery
-- Anthropic Claude API (`claude-sonnet-4-6`) — vision extraction for halal menu photo uploads
+- n8n workflow `workflow-1-menu-scraper-halal` — extracts Halal menus from weekly email PDFs and inserts into `menu_items`
 
 ---
 
@@ -55,10 +55,10 @@ A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria men
          │         ├─ Dish picker → star rating select → upsert into dish_ratings
          │         └─ Aggregate ratings shown as ⭐ avg (n) next to recurring dishes
          │
-         └─ #halal-menu-upload channel (owner only)
-                   ├─ messageCreate event → receives image attachment
-                   ├─ Claude Vision API → extracts dish names, dates, day names as JSON
-                   └─ addHalalMenuItem() → inserts into menu_items with category='Halal'
+         └─ Halal menu pipeline (external n8n workflow)
+                   ├─ Campus-Lunch-Pipeline: workflow-1-menu-scraper-halal
+                   ├─ Runs Saturdays 11:15 JST → parses weekly email PDF
+                   └─ Inserts Halal dishes directly into menu_items (category='Halal')
 ```
 
 ---
@@ -160,13 +160,11 @@ CREATE TABLE dish_ratings (
 - `/preview` and `/nextmenu` responses are ephemeral (only the requesting user sees them)
 - `/status` shows subscription info for the chosen campus and cross-references the other campus if also subscribed
 
-**Halal Menu Upload** (`src/events/messageCreate.js`)
-- Only active in channels named `halal-menu-upload`, restricted to the bot owner
-- Campus configurable via `HALAL_CAMPUS` env var (defaults to `Uzumasa`)
-- Image is resized to a max width of 1800px and compressed to JPEG before sending to Claude
-- Claude Vision (`claude-sonnet-4-6`) extracts dish name, day name, and date from the poster
-- Extracted items are inserted into `menu_items` with `category = 'Halal'` and `subcategory = 'Halal'`
-- Duplicate dishes on the same date are silently skipped via `ON CONFLICT DO NOTHING`
+**Halal Menu Pipeline** (external n8n workflow)
+- The Halal menu is now handled by the [Campus-Lunch-Pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) n8n workflow `workflow-1-menu-scraper-halal`
+- Runs Saturdays at 11:15 JST — extracts the Halal PDF from the weekly email, parses it with Claude, and inserts directly into `menu_items`
+- Inserts use `category = 'Halal'`, `subcategory = 'Halal'`, `price = 400`
+- The bot reads Halal items alongside all other menu items — no bot-side changes needed
 
 **Discord Bot Configuration**
 - Built with `discord.js` v14
@@ -252,8 +250,6 @@ Daily menu posts include a **"⭐ Rate today's dishes"** button. Tapping it open
 | `POSTGRES_DB` | PostgreSQL database name | Yes |
 | `POSTGRES_HOST` | PostgreSQL host | defaults to `localhost` |
 | `POSTGRES_PORT` | PostgreSQL port | defaults to `5432` |
-| `ANTHROPIC_API_KEY` | Anthropic API key (required for halal menu upload) | Yes if using halal upload |
-| `HALAL_CAMPUS` | Campus name for halal menu uploads | defaults to `Uzumasa` |
 | `BOT_ADMIN_ID` | Your Discord user ID — receives DM alerts on delivery failures | optional |
 | `NODE_ENV` | Set to `production` in deployment | defaults to `development` |
 | `LOG_LEVEL` | Logging verbosity: `debug`, `info`, `warn` | defaults to `info` |
@@ -291,8 +287,7 @@ wfl-bot/
 │   │   ├── campusSelector.js      # Campus picker buttons (Uzumasa / Kameoka) for all commands
 │   │   └── rateMenu.js            # Rating button/select-menu interaction handler
 │   └── events/
-│       ├── ready.js               # Bot ready: starts the publisher scheduler
-│       └── messageCreate.js       # Halal menu image upload handler
+│       └── ready.js               # Bot ready: starts the publisher scheduler
 ├── .env.example
 ├── package.json
 └── README.md
@@ -333,17 +328,16 @@ sudo journalctl -u campus-lunch-discord-bot -f
 
 ## Known Limitations & Planned Improvements
 
-1. **No rate limiting on halal uploads** — a bad actor in the upload channel could spam Claude API calls
-2. **Global command propagation is slow** — Discord takes up to 1 hour; use guild commands during development
-3. **Delivery log blocks same-day redelivery on channel change** — if a guild changes channels mid-day for a campus, the success log prevents re-posting that campus until the next day
-4. **No web dashboard** — subscription management is entirely through slash commands; an admin panel would help for multi-guild oversight
+1. **Global command propagation is slow** — Discord takes up to 1 hour; use guild commands during development
+2. **Delivery log blocks same-day redelivery on channel change** — if a guild changes channels mid-day for a campus, the success log prevents re-posting that campus until the next day
+3. **No web dashboard** — subscription management is entirely through slash commands; an admin panel would help for multi-guild oversight
 
 ---
 
 ## Additional information
 
 - **Menu source:** Weekly PDF emailed every Friday, scraped by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline)
-- **Halal menu:** Posted separately as a monthly paper poster; the image of which is uploaded manually via the `#halal-menu-upload` channel
+- **Halal menu:** Extracted from the weekly email PDF by the n8n workflow `workflow-1-menu-scraper-halal` and inserted into `menu_items` alongside regular menus
 
 ---
 
@@ -366,11 +360,6 @@ Ensure the bot has **Manage Roles** permission and that its own role sits above 
 
 **Menu not posting to a channel**
 Ensure the bot has **Send Messages** permission in the subscribed channel.
-
-**Halal menu upload not working**
-- Confirm the channel is named exactly `halal-menu-upload`
-- Confirm `ANTHROPIC_API_KEY` is set in `.env`
-- Check that the image is a clear photo of the poster — blurry or partially obscured images reduce extraction accuracy
 
 ---
 

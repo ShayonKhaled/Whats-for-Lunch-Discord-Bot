@@ -111,6 +111,9 @@ const CAMPUS_CONFIG = {
   },
 };
 
+const ALLERGY_DISCLAIMER =
+  '⚠️ *If you have any food allergies, please cross-check the allergens from the menu inside the cafeteria, as there may be unintended discrepancies here.*';
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Resolve a DB category name to its display name using campus config overrides. */
@@ -201,6 +204,7 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
   }
 
   let message = `# ${config.headerTitle} — ${dayName}, ${menuDate}\n\n`;
+  message += `${ALLERGY_DISCLAIMER}\n\n`;
   let lastCategory = null;
 
   for (const [dCat, section] of sections) {

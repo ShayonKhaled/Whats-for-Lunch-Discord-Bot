@@ -186,6 +186,12 @@ async function logDelivery(guildId, channelId, campus, menuDate, status, errorMe
     );
     logger.debug(`📝 Logged delivery: guild=${guildId}, campus=${campus}, status=${status}`);
   } catch (err) {
+    // If the ON CONFLICT doesn't match (e.g. older schema with unique on guild_id,menu_date
+    // without campus), try the older constraint, or just warn — the delivery already happened
+    if (err.code === '23505') {
+      logger.warn(`Delivery log conflict for guild=${guildId}, campus=${campus}, date=${menuDate} — skipping (row already exists)`);
+      return;
+    }
     logger.error(`Error logging delivery: ${err.message}`);
     throw err;
   }

@@ -94,7 +94,7 @@ const CAMPUS_CONFIG = {
     headerTitle: 'Uzumasa Campus',
     priceLookup(item) { return UZUMASA_PRICES[item.subcategory] ?? null; },
     showSetMealNote: true,
-    footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:30 AM – 1:30 PM**\n\n*Please note that the cafeteria is operating on a reduced schedule during the vacation period.*\n\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*',
+    footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**\n\n*Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.*',
     categoryLabels: null,
     menuOrderHasLabels: false,
   },
@@ -105,7 +105,7 @@ const CAMPUS_CONFIG = {
     headerTitle: 'Kameoka Campus',
     priceLookup(item) { return item.price ?? null; },  // from DB `price` column
     showSetMealNote: false,
-    footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:30 AM – 1:30 PM**\n\n*Please note that the cafeteria is operating on a reduced schedule during the vacation period.*',
+    footerText: '🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**',
     categoryLabels: KAMEOKA_CATEGORY_LABELS,
     menuOrderHasLabels: true,
   },

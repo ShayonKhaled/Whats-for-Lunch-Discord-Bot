@@ -169,7 +169,7 @@ function start(client) {
   }
 
   scheduledJob = schedule.scheduleJob(
-    { rule: '0 9 * * 1-5', tz: 'Asia/Tokyo' },
+    { rule: '0 6 * * 1-5', tz: 'Asia/Tokyo' },
     async () => {
       await publishMenu(client);
     }

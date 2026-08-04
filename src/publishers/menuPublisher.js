@@ -169,13 +169,13 @@ function start(client) {
   }
 
   scheduledJob = schedule.scheduleJob(
-    { rule: '0 9 * * 1-5', tz: 'Asia/Tokyo' },
+    { rule: '0 6 * * 1-5', tz: 'Asia/Tokyo' },
     async () => {
       await publishMenu(client);
     }
   );
 
-  logger.info('✅ Menu publisher scheduled (9:00 AM JST, Mon-Fri)');
+  logger.info('✅ Menu publisher scheduled (6:00 AM JST, Mon-Fri)');
 }
 
 function stop() {

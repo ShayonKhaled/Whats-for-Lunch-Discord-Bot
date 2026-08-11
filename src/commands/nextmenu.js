@@ -3,6 +3,30 @@ const db = require('../db');
 const logger = require('../utils/logger');
 const { formatMenuMessage } = require('../utils/formatMenu');
 const { buildCampusSelector } = require('../interactions/campusSelector');
+const { todayCampus, isWeekday, weekdaysBetween } = require('../utils/campusDate');
+
+/**
+ * Work out whether the cafeteria is shut between now and the next published menu.
+ * getNextMenu returns the earliest date *after* today that has items, so every
+ * weekday in between is closed by definition — we only need to check today.
+ */
+async function buildClosureNotice(campus, menuDate, dayName) {
+  const today = todayCampus();
+
+  const closedAhead = weekdaysBetween(today, menuDate);
+  const closedToday = isWeekday(today) && (await db.getTodayMenu(campus)).length === 0;
+
+  if (!closedToday && closedAhead.length === 0) return null;
+
+  const closedCount = closedAhead.length + (closedToday ? 1 : 0);
+  const reopens = dayName ? `**${dayName}, ${menuDate}**` : `**${menuDate}**`;
+
+  return (
+    `🚪 **The ${campus} Campus cafeteria is closed right now.**\n` +
+    `No lunch is being served${closedCount > 1 ? ` for ${closedCount} weekdays` : ' today'}. ` +
+    `It reopens on ${reopens} — here's that menu:`
+  );
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -25,7 +49,9 @@ module.exports = {
 
       if (!menuDate || !items || items.length === 0) {
         return interaction.editReply({
-          content: `⚠️ No upcoming weekday menu found for ${campus} Campus.`,
+          content:
+            `🚪 **The ${campus} Campus cafeteria is closed.**\n` +
+            'No upcoming menu has been published yet — check back once the next one is announced.',
         });
       }
 
@@ -49,10 +75,20 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
       );
 
-      await interaction.editReply({
+      const menuMessage = {
         content: `${chunks[0]}\n\n## **Tap below to rate the menu**`,
         components: [rateButton],
-      });
+      };
+
+      // Sent as its own message rather than prepended — chunks are already
+      // packed to 1900 chars, so inlining the notice could breach Discord's 2000 limit.
+      const closureNotice = await buildClosureNotice(campus, menuDate, items[0]?.day_name);
+      if (closureNotice) {
+        await interaction.editReply({ content: closureNotice });
+        await interaction.followUp({ ...menuMessage, ephemeral: true });
+      } else {
+        await interaction.editReply(menuMessage);
+      }
 
       for (let i = 1; i < chunks.length; i++) {
         await interaction.followUp({

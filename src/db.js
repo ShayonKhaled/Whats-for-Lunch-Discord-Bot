@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const logger = require('./utils/logger');
+const { todayCampus } = require('./utils/campusDate');
 
 let pool;
 
@@ -96,11 +97,13 @@ async function getSubscriptionsByGuildId(guildId) {
 
 async function getTodayMenu(campus) {
   try {
+    // The DB runs in UTC, so CURRENT_DATE is yesterday during the 6 AM JST run
+    const today = todayCampus();
     const result = await pool.query(
-      `SELECT * FROM menu_items WHERE campus = $1 AND menu_date::date = CURRENT_DATE ORDER BY category, subcategory`,
-      [campus]
+      `SELECT * FROM menu_items WHERE campus = $1 AND menu_date::date = $2::date ORDER BY category, subcategory`,
+      [campus, today]
     );
-    logger.debug(`Fetched ${result.rows.length} menu items for today (${campus})`);
+    logger.debug(`Fetched ${result.rows.length} menu items for today (${campus}, ${today})`);
     return result.rows;
   } catch (err) {
     logger.error(`Error fetching today's menu: ${err.message}`);
@@ -127,11 +130,11 @@ async function getNextMenu(campus) {
     const nextRes = await pool.query(
       `SELECT menu_date FROM menu_items
        WHERE campus = $1
-         AND (menu_date::date > CURRENT_DATE)
+         AND (menu_date::date > $2::date)
          AND EXTRACT(ISODOW FROM menu_date::date) BETWEEN 1 AND 5
        ORDER BY menu_date::date ASC
        LIMIT 1`,
-      [campus]
+      [campus, todayCampus()]
     );
 
     if (!nextRes.rows || nextRes.rows.length === 0) {

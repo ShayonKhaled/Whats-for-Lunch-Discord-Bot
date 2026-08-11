@@ -25,7 +25,7 @@ module.exports = {
     // Start the menu publisher job
     try {
       menuPublisher.start(client);
-      logger.info('📅 Menu publisher scheduled (9:00 AM JST, Mon-Fri)');
+      logger.info('📅 Menu publisher scheduled (6:00 AM JST, Mon-Fri)');
     } catch (error) {
       logger.error(`Failed to start menu publisher: ${error.message}`);
     }

@@ -3,6 +3,7 @@ const db = require('../db');
 const logger = require('../utils/logger');
 const { formatMenuMessage } = require('../utils/formatMenu');
 const { buildCampusSelector } = require('../interactions/campusSelector');
+const { todayCampus } = require('../utils/campusDate');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -42,7 +43,7 @@ module.exports = {
       }
 
       // Rate button keyed to today's date
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayCampus();
       const rateButton = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`rate_menu_open:${campus}:${today}`)

@@ -38,7 +38,7 @@ module.exports = {
       let statusMessage = `✅ **${campus} Campus Status**
 Channel: <#${subscription.channel_id}>
 Subscribed: ${subscribedDate}
-Next update: 9:00 AM JST (Mon-Fri)`;
+Next update: 6:00 AM JST (Mon-Fri)`;
 
       // Show other campus subscription info if it exists
       const allSubs = await db.getSubscriptionsByGuildId(guildId);

@@ -57,7 +57,7 @@ module.exports = {
         await member.roles.add(role);
         logger.info(`🔔 Added ${role.name} role to ${member.user.tag} in ${interaction.guild.name}`);
         return interaction.editReply({
-          content: `🔔 You're in — you'll be pinged every weekday at 9:00 AM JST when the ${campus} Campus menu is posted.`,
+          content: `🔔 You're in — you'll be pinged every weekday at 6:00 AM JST when the ${campus} Campus menu is posted.`,
         });
       }
     } catch (error) {

@@ -88,7 +88,7 @@ module.exports = {
       await interaction.followUp({
         content:
           `✅ **${campus} Campus Menu Bot Subscribed**\n` +
-          `Menu updates will be posted in <#${channelId}> every weekday at **9:00 AM JST**.\n\n` +
+          `Menu updates will be posted in <#${channelId}> every weekday at **6:00 AM JST**.\n\n` +
           `📣 Members can use \`/notify\` to opt in or out of the <@&${role.id}> ping.`,
         ephemeral: false,
       });

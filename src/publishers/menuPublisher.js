@@ -4,6 +4,7 @@ const db = require('../db');
 const logger = require('../utils/logger');
 const { formatMenuMessage } = require('../utils/formatMenu');
 const { push: pingUptimeKuma } = require('../utils/uptimeKuma');
+const { todayCampus } = require('../utils/campusDate');
 
 let scheduledJob = null;
 
@@ -12,7 +13,7 @@ async function publishMenu(client) {
   logger.info(`🔄 Menu publisher job started at ${now.toISOString()}`);
 
   try {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = todayCampus(); // YYYY-MM-DD in JST, not UTC
 
     // Get all active subscriptions (now per-campus)
     const subscriptions = await db.getActiveSubscriptions();

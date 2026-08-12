@@ -71,9 +71,10 @@ test('rendered menus pick up the configured hours', () => {
 
 test('Uzumasa listed prices convert to the previously hardcoded student prices', () => {
   const cases = [
+    // The PDF prints two prices for these two sections (430 above 500); the
+    // scraper is instructed to take the lower, which is the base price.
     ['Set Meals', 430, 330, 'Campus Lunch — 100 off'],
     ['A La Carte', 430, 330, 'à la carte — 100 off'],
-    ['Halal', 500, 400, 'halal — 100 off'],
     ['Curry', 380, 330, 'curry — 50 off'],
     ['Noodles', 300, 250, 'ramen — 50 off'],
     ['Noodles', 250, 200, 'udon/soba — 50 off'],
@@ -151,4 +152,30 @@ test('Kameoka renders its listed price unchanged', () => {
     'Kameoka'
   );
   assert.match(chunk, /¥350/);
+});
+
+test('halal is a flat 400 whatever the scraper reports', () => {
+  // Confirmed at the Uzumasa payment machine: halal is ¥400 always, campaign or
+  // not. Deriving it would be fragile — halal returns in September and nobody
+  // has seen what the PDF prints for it. These cases pin the price against any
+  // listed value the scraper might produce.
+  for (const listed of [null, 400, 500, 570]) {
+    assert.strictEqual(
+      studentPrice('Uzumasa', 'Halal', listed),
+      400,
+      `halal must be 400 even when the scraper reports ${listed}`
+    );
+  }
+});
+
+test('halal renders as 400 on the menu', () => {
+  const [chunk] = formatMenuMessage([
+    {
+      campus: 'Uzumasa', menu_date: '2026-09-01', day_name: 'Tuesday',
+      category: 'Halal', subcategory: 'Halal',
+      dish_name: 'Halal Chicken Curry', calories: 520, price: 500,
+    },
+  ]);
+  assert.match(chunk, /¥400/);
+  assert.doesNotMatch(chunk, /¥500/, 'the listed price must not leak through');
 });

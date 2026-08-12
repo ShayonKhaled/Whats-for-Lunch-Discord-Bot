@@ -71,9 +71,10 @@ test('rendered menus pick up the configured hours', () => {
 
 test('Uzumasa listed prices convert to the previously hardcoded student prices', () => {
   const cases = [
+    // The PDF prints two prices for these two sections (430 above 500); the
+    // scraper is instructed to take the lower, which is the base price.
     ['Set Meals', 430, 330, 'Campus Lunch — 100 off'],
     ['A La Carte', 430, 330, 'à la carte — 100 off'],
-    ['Halal', 500, 400, 'halal — 100 off'],
     ['Curry', 380, 330, 'curry — 50 off'],
     ['Noodles', 300, 250, 'ramen — 50 off'],
     ['Noodles', 250, 200, 'udon/soba — 50 off'],
@@ -151,4 +152,18 @@ test('Kameoka renders its listed price unchanged', () => {
     'Kameoka'
   );
   assert.match(chunk, /¥350/);
+});
+
+test('halal falls back to its known student price rather than a derived one', () => {
+  // Halal returns in September and has never carried a listed price, so the
+  // -100 tier is unverified for it. Until then the fallback table supplies the
+  // known ¥400; this pins that so a scraper change cannot silently alter it.
+  const [chunk] = formatMenuMessage([
+    {
+      campus: 'Uzumasa', menu_date: '2026-09-01', day_name: 'Tuesday',
+      category: 'Halal', subcategory: 'Halal',
+      dish_name: 'Halal Chicken Curry', calories: 520, price: null,
+    },
+  ]);
+  assert.match(chunk, /¥400/);
 });

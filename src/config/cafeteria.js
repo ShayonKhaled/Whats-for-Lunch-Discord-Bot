@@ -43,12 +43,20 @@ function buildFooter(campusNotes = []) {
 /**
  * Cafeteria Discount Campaign — students only, and Uzumasa only.
  *
- * The weekly menu PDFs print the *visitor/faculty* price. Uzumasa students pay
- * that minus the amounts below, per the campaign notice: 100 yen off lunch and
- * à la carte, 50 yen off curry and noodles, nothing off sides. Verified against
- * the 2026-08-18 PDF, where every listed price minus the tier below reproduces
- * the prices this bot had hardcoded (¥430→330, ¥500→400, ¥380→330, ¥300→250,
- * ¥250→200, ¥70→70).
+ * Uzumasa students pay the menu's base price minus the amounts below, per the
+ * campaign notice: 100 yen off lunch and à la carte, 50 yen off curry and
+ * noodles, nothing off sides. Verified against the 2026-08-18 PDF, where the
+ * base price minus the tier below reproduces every price this bot had
+ * hardcoded (¥430→330, ¥380→330, ¥300→250, ¥250→200, ¥70→70).
+ *
+ * Note the PDF prints TWO prices for Set Meals and A La Carte (e.g. 430 above
+ * 500); the lower is the base price, and the scraper is instructed to take it.
+ * Curry, Ramen and Udon/Soba print a single price.
+ *
+ * Halal is UNVERIFIED — it is not served until September, so no halal row has
+ * ever carried a listed price. Its student price is known to be ¥400, which the
+ * fallback table supplies. When halal returns, check that the scraped base minus
+ * 100 still lands on 400 before trusting the derived value.
  *
  * Kameoka does not run the campaign, so its printed price is already what a
  * student pays — every tier there is zero.

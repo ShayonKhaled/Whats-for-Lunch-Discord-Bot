@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>What's for Lunch — Admin</title>
+<style>
+/* Laid out for a landscape screen: the page is a fixed-height shell and the two
+   panes scroll independently, so the header and the stat strip stay put and no
+   vertical space is spent on chrome that scrolls away. Below 1000px — a phone,
+   or a window in portrait — it falls back to one column and normal page flow.
+
+   Status colours are the reserved status palette and are always paired with an
+   icon and a text label, so state is never carried by hue alone. */
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --plane: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --hairline: #e1e0d9;
+  --border: rgba(11, 11, 11, 0.10);
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --accent: #2a78d6;
+  --wash: rgba(11, 11, 11, 0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --plane: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --hairline: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --wash: rgba(255, 255, 255, 0.05);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --plane: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --hairline: #2c2c2a;
+  --border: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;
+  --wash: rgba(255, 255, 255, 0.05);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--text-primary);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.app { display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: none; }
+h1 { font-size: 16px; font-weight: 620; margin: 0; letter-spacing: -0.01em; white-space: nowrap; }
+.sub { color: var(--text-muted); font-size: 12.5px; }
+#subtitle { font-variant-numeric: tabular-nums; }
+.spacer { flex: 1 1 auto; }
+
+button, select, input {
+  font: inherit; font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+button:hover:not(:disabled), select:hover { background: var(--wash); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 550; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+input { cursor: text; }
+label.field { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+
+/* ── Stat strip ─────────────────────────────────────────────────────────── */
+/* One row of hairline-divided cells rather than floating cards — same numbers,
+   about a third of the height. Values use proportional figures; tabular figures
+   are for columns that align, not for standalone numbers. */
+.stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden; flex: none;
+}
+.stat { background: var(--surface-1); padding: 13px 17px 14px; min-width: 0; }
+.stat .k { font-size: 12px; color: var(--text-muted); line-height: 1.3; }
+.stat .v { font-size: 22px; font-weight: 640; margin-top: 5px; line-height: 1.2; letter-spacing: -0.015em; }
+.stat .v small { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+.stat .n { font-size: 12px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Panes ──────────────────────────────────────────────────────────────── */
+.panes { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.panel {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+}
+.panel h2 {
+  font-size: 12.5px; font-weight: 620; margin: 0; padding: 13px 18px; flex: none;
+  border-bottom: 1px solid var(--hairline); letter-spacing: -0.005em;
+  display: flex; align-items: baseline; gap: 9px;
+}
+.panel h2 .hint { font-weight: 400; color: var(--text-muted); font-size: 12px; }
+.pbody { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 0; }
+#days { container-type: inline-size; }
+
+@media (min-width: 1000px) {
+  body { overflow: hidden; }
+  .app { height: 100dvh; }
+  .panes {
+    flex: 1 1 auto;
+    display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    grid-auto-rows: minmax(0, 1fr);
+  }
+}
+
+/* ── Status chips ───────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 560; padding: 3px 10px 3px 8px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--wash);
+}
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.s-delivered .dot { background: var(--good); }
+.s-partial .dot { background: var(--warning); }
+.s-failed .dot, .s-missing .dot { background: var(--critical); }
+.s-pending .dot { background: var(--serious); }
+.s-no-menu .dot, .s-weekend .dot, .s-no-subscribers .dot, .s-skipped .dot { background: var(--text-muted); }
+.s-delivered { color: var(--good); }
+.s-partial, .s-pending { color: var(--text-primary); }
+.s-failed, .s-missing { color: var(--critical); }
+.s-no-menu, .s-weekend, .s-no-subscribers, .s-skipped { color: var(--text-muted); }
+
+/* ── Day list ───────────────────────────────────────────────────────────── */
+.day { border-bottom: 1px solid var(--hairline); }
+.day:last-child { border-bottom: 0; }
+.day.weekend { background: var(--wash); }
+.day.today .date strong { color: var(--accent); }
+
+.dayhead {
+  display: grid; grid-template-columns: 118px 132px minmax(0, 1fr) auto 12px;
+  gap: 18px; align-items: center; padding: 13px 18px; width: 100%;
+  background: none; border: 0; border-radius: 0; text-align: left; cursor: pointer;
+}
+.dayhead:hover { background: var(--wash); }
+.date strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.date span { font-size: 12.5px; color: var(--text-muted); margin-left: 7px; }
+.meta { font-size: 13px; color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.time { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.caret { color: var(--text-muted); font-size: 10px; transition: transform 0.15s; }
+
+/* Consecutive empty weekends collapse to one muted line. In a 14-day window
+   that is four full rows of "Weekend / no menu" replaced by two, and the
+   weekday rhythm the page is actually about stays readable. */
+.weekendrow {
+  padding: 8px 18px; border-bottom: 1px solid var(--hairline);
+  background: var(--wash); color: var(--text-muted);
+  font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.day.open .caret { transform: rotate(90deg); }
+
+/* Detail sits inside the day pane, so it is the *pane* width that decides
+   whether the two tables fit side by side — a container query, not a media
+   query, which stays correct however the panes are sized. */
+.detail { display: none; }
+.day.open .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 34px; padding: 2px 18px 20px 44px; }
+@container (min-width: 700px) {
+  .day.open .detail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.detail h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.055em; color: var(--text-muted); font-weight: 600; margin: 14px 0 8px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 14px 6px 0; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+td { padding: 8px 14px 8px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.err { color: var(--critical); font-size: 12px; }
+.scroll { overflow-x: auto; }
+
+.empty { padding: 34px 16px; text-align: center; color: var(--text-muted); font-size: 13.5px; }
+.banner { padding: 11px 15px; border-radius: 9px; font-size: 13.5px; border: 1px solid var(--border); background: var(--surface-1); flex: none; }
+.banner.bad { border-color: var(--critical); color: var(--critical); }
+.banner.ok { border-color: var(--good); color: var(--good); }
+
+/* ── Log pane ───────────────────────────────────────────────────────────── */
+/* Stacked rather than columnar: this pane is the narrow one, and a message that
+   wraps to four lines beside a 148px timestamp column wastes the width it has. */
+.logrow { padding: 12px 18px; border-bottom: 1px solid var(--hairline); }
+.logrow:last-child { border-bottom: 0; }
+.logrow .head { display: flex; gap: 9px; align-items: baseline; }
+.logrow .ts { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.lvl-ERROR { color: var(--critical); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; }
+.lvl-WARN { color: var(--serious); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; }
+pre.log { margin: 4px 0 0; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <h1>🍱 Lunch bot</h1>
+  <span class="sub" id="subtitle">Loading…</span>
+  <span class="spacer"></span>
+  <label class="field">Window
+    <select id="window">
+      <option value="7">7 days</option>
+      <option value="14" selected>14 days</option>
+      <option value="30">30 days</option>
+      <option value="60">60 days</option>
+    </select>
+  </label>
+  <label class="field"><input type="checkbox" id="auto" style="cursor:pointer"> Auto</label>
+  <button id="theme" title="Toggle theme">◐</button>
+  <button id="refresh">Refresh</button>
+  <button id="publish" class="primary" hidden>Re-publish today</button>
+</header>
+
+<div id="alert"></div>
+
+<div class="stats" id="stats"></div>
+
+<div class="panes">
+  <section class="panel">
+    <h2>Daily menu &amp; delivery <span class="hint">click a day for servers and dishes</span></h2>
+    <div class="pbody" id="days"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Warnings &amp; errors <span class="hint">logs/bot.log</span></h2>
+    <div class="pbody" id="logs"><div class="empty">Loading…</div></div>
+  </section>
+</div>
+
+</div>
+
+<script>
+'use strict';
+
+// Times are rendered in campus time throughout. The database stores UTC and the
+// publisher runs at 06:00 JST, so a UTC-rendered timestamp shows the previous
+// day for every morning post — the exact confusion this dashboard exists to
+// clear up. Every displayed time is explicitly labelled JST.
+const TZ = 'Asia/Tokyo';
+const TOKEN_KEY = 'wfl-dashboard-token';
+
+const STATUS_LABEL = {
+  delivered: 'Delivered',
+  partial: 'Partial',
+  failed: 'Not delivered',
+  pending: 'Pending',
+  'no-menu': 'No menu',
+  'no-subscribers': 'No subscribers',
+  weekend: 'Weekend',
+  success: 'Delivered',
+  skipped: 'Skipped',
+  missing: 'No log row',
+};
+const STATUS_ICON = {
+  delivered: '✓', partial: '◐', failed: '✕', pending: '○',
+  'no-menu': '–', 'no-subscribers': '–', weekend: '·',
+  success: '✓', skipped: '↷', missing: '✕',
+};
+
+let token = localStorage.getItem(TOKEN_KEY) || '';
+let timer = null;
+const openDays = new Set();
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/** Replace a scrolling pane's contents without throwing away where you were. */
+function setPane(el, html) {
+  const top = el.scrollTop;
+  el.innerHTML = html;
+  el.scrollTop = top;
+}
+
+function chip(status) {
+  const label = STATUS_LABEL[status] || status;
+  return `<span class="chip s-${esc(status)}"><span class="dot"></span>${STATUS_ICON[status] || ''} ${esc(label)}</span>`;
+}
+
+function jstTime(iso) {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ, hour: '2-digit', minute: '2-digit',
+  }).format(new Date(iso)) + ' JST';
+}
+
+function jstDateTime(iso) {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ, year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  }).format(new Date(iso)) + ' JST';
+}
+
+async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (token) headers['X-Dashboard-Token'] = token;
+
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) {
+    const entered = prompt('This dashboard requires its DASHBOARD_TOKEN:');
+    if (entered) {
+      token = entered;
+      localStorage.setItem(TOKEN_KEY, entered);
+      return api(path, options);
+    }
+    throw new Error('Unauthorised');
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 409) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+
+function banner(html, kind = '') {
+  $('alert').innerHTML = html ? `<div class="banner ${kind}">${html}</div>` : '';
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+
+function renderStats(overview, health) {
+  const s = overview.summary;
+  const last = health.lastDelivery;
+  const attention = s.failed + s.partial;
+
+  $('stats').innerHTML = `
+    <div class="stat">
+      <div class="k">Bot</div>
+      <div class="v">${health.discordConnected ? '✓ Online' : '✕ Offline'}</div>
+      <div class="n">${health.guilds} guild${health.guilds === 1 ? '' : 's'} · DB ${health.databaseConnected ? 'connected' : 'unreachable'}</div>
+    </div>
+    <div class="stat">
+      <div class="k">Last successful post</div>
+      <div class="v">${last ? esc(last.menuDate) : '—'}</div>
+      <div class="n">${last ? jstDateTime(last.deliveredAt) : 'none on record'}</div>
+    </div>
+    <div class="stat">
+      <div class="k">Delivered</div>
+      <div class="v">${s.delivered}<small> / ${s.weekdays}</small></div>
+      <div class="n">weekdays in this window</div>
+    </div>
+    <div class="stat">
+      <div class="k">Needs attention</div>
+      <div class="v" style="${attention ? 'color:var(--critical)' : ''}">${attention}</div>
+      <div class="n">${s.failed} not delivered · ${s.partial} partial</div>
+    </div>
+    <div class="stat">
+      <div class="k">Quiet days</div>
+      <div class="v">${s.noMenu}</div>
+      <div class="n">no menu — cafeteria closed</div>
+    </div>`;
+}
+
+function deliveryTable(campuses) {
+  const rows = campuses.flatMap((c) => c.deliveries);
+  if (rows.length === 0) return '<p class="sub" style="margin:4px 0">No delivery-log rows for this day.</p>';
+
+  return `<div class="scroll"><table>
+    <thead><tr><th>Server</th><th>Campus</th><th>Status</th><th class="num">Posted</th><th>Detail</th></tr></thead>
+    <tbody>${rows.map((d) => `
+      <tr>
+        <td>${esc(d.guildName)}${d.channelName ? `<br><span class="sub">#${esc(d.channelName)}</span>` : ''}</td>
+        <td>${esc(d.campus)}</td>
+        <td>${chip(d.status)}</td>
+        <td class="num">${jstTime(d.deliveredAt)}</td>
+        <td>${d.errorMessage ? `<span class="err">${esc(d.errorMessage)}</span>` : '—'}</td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function menuTable(items) {
+  if (!items.length) return '<p class="sub" style="margin:4px 0">No menu rows in the database for this date.</p>';
+
+  const byCampus = {};
+  for (const it of items) (byCampus[it.campus] ||= []).push(it);
+
+  return Object.entries(byCampus).map(([campus, rows]) => `
+    <h3>${esc(campus)} — ${rows.length} item${rows.length === 1 ? '' : 's'}</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Category</th><th>Dish</th><th class="num">Price</th><th class="num">kcal</th></tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr>
+          <td>${esc(r.category || '—')}${r.subcategory ? `<br><span class="sub">${esc(r.subcategory)}</span>` : ''}</td>
+          <td>${esc(r.dish_name)}${r.allergens ? `<br><span class="sub">${esc(r.allergens)}</span>` : ''}</td>
+          <td class="num">${r.price == null ? '—' : '¥' + esc(r.price)}</td>
+          <td class="num">${r.calories == null ? '—' : esc(r.calories)}</td>
+        </tr>`).join('')}
+      </tbody></table></div>`).join('');
+}
+
+function renderDays(overview) {
+  if (!overview.days.length) {
+    setPane($('days'), '<div class="empty">Nothing in this window.</div>');
+    return;
+  }
+
+  // A weekend with nothing on it is not news. Runs of them collapse into a
+  // single muted line; a weekend that somehow *does* carry a menu or a delivery
+  // stays a full, expandable row, because that would be worth seeing.
+  const rows = [];
+  for (const d of overview.days) {
+    const quiet = !d.isWeekday && d.totalItems === 0 &&
+      d.campuses.every((c) => c.deliveries.length === 0);
+    const prev = rows[rows.length - 1];
+    if (quiet && prev && prev.weekend) prev.dates.push(d);
+    else if (quiet) rows.push({ weekend: true, dates: [d] });
+    else rows.push({ day: d });
+  }
+
+  setPane($('days'), rows.map((row) => {
+    if (row.weekend) {
+      // days arrive newest-first, so the run reads backwards
+      const first = row.dates[row.dates.length - 1];
+      const last = row.dates[0];
+      const span = first === last
+        ? `${first.dayName.slice(0, 3)} ${first.date}`
+        : `${first.dayName.slice(0, 3)} ${first.date} – ${last.dayName.slice(0, 3)} ${last.date}`;
+      return `<div class="weekendrow">${esc(span)} · weekend, no publishing</div>`;
+    }
+
+    const d = row.day;
+    const menuBits = d.campuses
+      .filter((c) => c.itemCount > 0)
+      .map((c) => `${esc(c.campus)} ${c.itemCount}`)
+      .join(' · ');
+    const delivered = d.campuses.reduce((n, c) => n + c.successCount, 0);
+    const expected = d.campuses.reduce((n, c) => n + c.expectedCount, 0);
+
+    const meta = [
+      menuBits || (d.isWeekday ? 'no menu in the database' : ''),
+      expected ? `${delivered}/${expected} servers` : '',
+    ].filter(Boolean).join('  ·  ');
+
+    return `
+      <div class="day ${d.isWeekday ? '' : 'weekend'} ${d.isToday ? 'today' : ''} ${openDays.has(d.date) ? 'open' : ''}" data-date="${esc(d.date)}">
+        <button class="dayhead" data-toggle="${esc(d.date)}">
+          <span class="date"><strong>${esc(d.date)}</strong><span>${esc(d.dayName.slice(0, 3))}${d.isToday ? ' · today' : ''}</span></span>
+          <span>${chip(d.status)}</span>
+          <span class="meta">${meta}</span>
+          <span class="time">${d.firstDeliveredAt ? jstTime(d.firstDeliveredAt) : ''}</span>
+          <span class="caret">▶</span>
+        </button>
+        <div class="detail">
+          <section>
+            <h3>Deliveries</h3>
+            ${deliveryTable(d.campuses)}
+          </section>
+          <section>
+            <h3>Menu</h3>
+            <div class="menuslot" data-date="${esc(d.date)}"><span class="sub">Loading menu…</span></div>
+          </section>
+        </div>
+      </div>`;
+  }).join(''));
+
+  for (const btn of document.querySelectorAll('[data-toggle]')) {
+    btn.addEventListener('click', () => toggleDay(btn.dataset.toggle));
+  }
+  // Days left open across a refresh keep their menu loaded.
+  for (const date of openDays) loadMenu(date);
+}
+
+async function loadMenu(date) {
+  const slot = document.querySelector(`.menuslot[data-date="${date}"]`);
+  if (!slot || slot.dataset.loaded) return;
+  slot.dataset.loaded = '1';
+  try {
+    const { items } = await api(`/api/menu?date=${encodeURIComponent(date)}`);
+    slot.innerHTML = menuTable(items);
+  } catch (err) {
+    slot.dataset.loaded = '';
+    slot.innerHTML = `<span class="err">Could not load menu: ${esc(err.message)}</span>`;
+  }
+}
+
+function toggleDay(date) {
+  const el = document.querySelector(`.day[data-date="${date}"]`);
+  if (!el) return;
+  const nowOpen = !el.classList.contains('open');
+  el.classList.toggle('open', nowOpen);
+  if (nowOpen) { openDays.add(date); loadMenu(date); } else { openDays.delete(date); }
+}
+
+function renderLogs(payload) {
+  if (!payload.available) {
+    setPane($('logs'), `<div class="empty">Log file unavailable — ${esc(payload.reason || 'unknown')}</div>`);
+    return;
+  }
+  if (!payload.entries.length) {
+    setPane($('logs'), '<div class="empty">No warnings or errors in the recent log tail. ✓</div>');
+    return;
+  }
+  setPane($('logs'), payload.entries.map((e) => `
+    <div class="logrow">
+      <div class="head">
+        <span class="lvl-${esc(e.level)}">${esc(e.level)}</span>
+        <span class="ts">${esc(e.timestamp)}</span>
+      </div>
+      <pre class="log">${esc(e.message)}</pre>
+    </div>`).join(''));
+}
+
+function renderPublishState(publish) {
+  const btn = $('publish');
+  btn.hidden = !publish.enabled;
+  if (!publish.enabled) return;
+
+  btn.disabled = publish.running;
+  btn.textContent = publish.running ? 'Publishing…' : 'Re-publish today';
+
+  if (publish.running) {
+    banner(`Publish run started ${jstDateTime(publish.startedAt)} — in progress…`);
+  } else if (publish.error) {
+    banner(`Last publish run failed: ${esc(publish.error)}`, 'bad');
+  } else if (publish.finishedAt) {
+    banner(`Last manual publish finished ${jstDateTime(publish.finishedAt)}.`, 'ok');
+  }
+}
+
+// ── Load cycle ──────────────────────────────────────────────────────────────
+
+async function load() {
+  const days = $('window').value;
+  try {
+    const [health, overview, logs] = await Promise.all([
+      fetch('/api/status').then((r) => r.json()),
+      api(`/api/overview?days=${days}`),
+      api('/api/logs?level=WARN&limit=80'),
+    ]);
+
+    renderStats(overview, health);
+    renderDays(overview);
+    renderLogs(logs);
+    renderPublishState(overview.publish);
+
+    $('subtitle').textContent =
+      `${overview.from} → ${overview.to} · today ${overview.today} JST · refreshed ${jstTime(overview.generatedAt)}`;
+
+    if (!overview.publish.running && !overview.publish.error && !overview.publish.finishedAt) banner('');
+  } catch (err) {
+    banner(`Could not load dashboard: ${esc(err.message)}`, 'bad');
+  }
+}
+
+$('refresh').addEventListener('click', load);
+$('window').addEventListener('change', load);
+
+$('auto').addEventListener('change', (e) => {
+  clearInterval(timer);
+  timer = e.target.checked ? setInterval(load, 30000) : null;
+});
+
+$('theme').addEventListener('click', () => {
+  const now = document.documentElement.dataset.theme;
+  const next = now === 'dark' ? 'light' : now === 'light' ? 'auto' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('wfl-theme', next);
+});
+document.documentElement.dataset.theme = localStorage.getItem('wfl-theme') || 'auto';
+
+$('publish').addEventListener('click', async () => {
+  if (!confirm("Re-run the publisher for today?\n\nGuilds that already received today's menu are skipped, so this only retries the ones that failed.")) return;
+  try {
+    const res = await api('/api/publish', { method: 'POST' });
+    if (!res.started) banner(`Not started: ${esc(res.reason)}`, 'bad');
+    renderPublishState(res.publish);
+    // Poll while the run is in flight so the result appears without a manual refresh.
+    const poll = setInterval(async () => {
+      await load();
+      const state = await api('/api/overview?days=1');
+      if (!state.publish.running) clearInterval(poll);
+    }, 3000);
+  } catch (err) {
+    banner(`Publish failed: ${esc(err.message)}`, 'bad');
+  }
+});
+
+load();
+</script>
+</body>
+</html>

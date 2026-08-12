@@ -347,6 +347,89 @@ async function getLastSuccessfulDelivery() {
   }
 }
 
+// ─── Admin dashboard ─────────────────────────────────────────────────────────
+
+/**
+ * Delivery-log rows in a date window, with the subscribing guild's name joined
+ * on so the dashboard can show "Kyoto CS Club" rather than a snowflake.
+ *
+ * The join casts bigint → text rather than text → bigint. guild_id is BIGINT
+ * here and TEXT in guild_subscriptions (see the schema note); casting the text
+ * column would make one non-numeric subscription row fail the entire query,
+ * whereas bigint → text always succeeds.
+ *
+ * guild_name is NULL for guilds that have since been deleted from
+ * guild_subscriptions — the delivery still happened, so the row is kept.
+ */
+async function getDeliveriesBetween(fromDate, toDate) {
+  try {
+    const result = await pool.query(
+      `SELECT dl.guild_id::text                          AS guild_id,
+              dl.channel_id::text                        AS channel_id,
+              dl.campus,
+              dl.menu_date,
+              dl.status,
+              dl.error_message,
+              -- rows written between 2026-06-16 and the logDelivery fix have a
+              -- NULL delivered_at; created_at is populated on every row.
+              COALESCE(dl.delivered_at, dl.created_at)   AS delivered_at,
+              gs.guild_name,
+              gs.channel_name
+         FROM bot_delivery_log dl
+         LEFT JOIN guild_subscriptions gs
+                ON gs.guild_id = dl.guild_id::text
+               AND gs.campus   = dl.campus
+        WHERE dl.menu_date::date BETWEEN $1::date AND $2::date
+        ORDER BY dl.menu_date DESC, dl.campus, gs.guild_name NULLS LAST`,
+      [fromDate, toDate]
+    );
+    return result.rows;
+  } catch (err) {
+    logger.error(`Error fetching deliveries between ${fromDate} and ${toDate}: ${err.message}`);
+    throw err;
+  }
+}
+
+/**
+ * Per-day, per-campus menu item counts. The dashboard only needs "was there a
+ * menu, and how big was it" for the day list — the full rows are fetched
+ * separately when a day is expanded.
+ */
+async function getMenuCountsBetween(fromDate, toDate) {
+  try {
+    const result = await pool.query(
+      `SELECT menu_date, campus, COUNT(*)::int AS item_count
+         FROM menu_items
+        WHERE menu_date::date BETWEEN $1::date AND $2::date
+        GROUP BY menu_date, campus
+        ORDER BY menu_date DESC, campus`,
+      [fromDate, toDate]
+    );
+    return result.rows;
+  } catch (err) {
+    logger.error(`Error fetching menu counts between ${fromDate} and ${toDate}: ${err.message}`);
+    throw err;
+  }
+}
+
+/** Every menu row for one date, across all campuses — the day-detail view. */
+async function getMenuItemsForDate(dateText) {
+  try {
+    const result = await pool.query(
+      `SELECT campus, menu_date, day_name, category, subcategory, dish_name,
+              allergens, calories, protein, fat, sodium, price
+         FROM menu_items
+        WHERE menu_date::date = $1::date
+        ORDER BY campus, category, subcategory, dish_name`,
+      [dateText]
+    );
+    return result.rows;
+  } catch (err) {
+    logger.error(`Error fetching menu items for ${dateText}: ${err.message}`);
+    throw err;
+  }
+}
+
 async function closeConnection() {
   if (pool) {
     await pool.end();
@@ -370,6 +453,10 @@ module.exports = {
   ping,
   getLastSuccessfulDelivery,
   getMenuItemsBetween,
+  // admin dashboard
+  getDeliveriesBetween,
+  getMenuCountsBetween,
+  getMenuItemsForDate,
   // ratings
   upsertRating,
   getRatingsForDishes,

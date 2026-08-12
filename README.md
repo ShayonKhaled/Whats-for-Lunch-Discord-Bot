@@ -253,6 +253,43 @@ Daily menu posts include a **"⭐ Rate today's dishes"** button. Tapping it open
 | `BOT_ADMIN_ID` | Your Discord user ID — receives DM alerts on delivery failures | optional |
 | `NODE_ENV` | Set to `production` in deployment | defaults to `development` |
 | `LOG_LEVEL` | Logging verbosity: `debug`, `info`, `warn` | defaults to `info` |
+| `HEALTH_PORT` | Port for the health endpoint and admin dashboard | defaults to `3000` |
+| `DASHBOARD_TOKEN` | Locks the dashboard behind a token and enables the re-publish button | optional |
+
+---
+
+## Admin Dashboard
+
+`http://<bot-host>:3000/dashboard` — a local, single-page view of what the bot
+has and has not done. It runs inside the bot process, so there is no second
+service to deploy and it reuses the existing connection pool.
+
+Each weekday is shown with its menu, whether every subscribed guild received it,
+what time the first post landed, and any error the publisher recorded. The
+distinction it is built around is **no menu** (the cafeteria is closed, or the
+n8n scraper did not run) versus **a menu that reached nobody** — the second is
+the failure worth chasing, and it looks identical to the first in the raw tables.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/dashboard` | GET | The page itself |
+| `/api/overview?days=N` | GET | Per-day status, 1–120 days, default 14 |
+| `/api/menu?date=YYYY-MM-DD` | GET | Every menu row for one date |
+| `/api/logs?limit=N&level=WARN` | GET | Recent entries from `logs/bot.log` |
+| `/api/publish` | POST | Re-run today's publish — **requires `DASHBOARD_TOKEN`** |
+
+`/` and `/api/status` are unchanged, so Uptime Kuma is unaffected.
+
+**Access control.** With `DASHBOARD_TOKEN` unset the read endpoints are open —
+fine for a bot only reachable on a home LAN — and the re-publish endpoint is
+disabled and returns 503. Setting a token requires it on every dashboard
+endpoint, via the `X-Dashboard-Token` header or a `?token=` parameter; the page
+prompts for it and keeps it in `sessionStorage`. An unset token never authorises
+a write.
+
+Re-publishing calls the same `publishMenu()` the 9:00 AM scheduler uses, so the
+existing "already delivered" guard applies: pressing the button twice retries the
+guilds that failed rather than double-posting to the ones that succeeded.
 
 ---
 
@@ -271,6 +308,12 @@ wfl-bot/
 ├── src/
 │   ├── bot.js                     # Main entry point, command and event loader
 │   ├── db.js                      # PostgreSQL connection pool and all query functions
+│   ├── server.js                  # Health endpoint (/api/status) and dashboard routes
+│   ├── dashboard/
+│   │   ├── index.html             # The admin dashboard page — no build step, no CDN
+│   │   ├── overview.js            # Pure function: flat query rows → per-day delivery status
+│   │   ├── logTail.js             # Parses recent entries out of logs/bot.log
+│   │   └── publishRunner.js       # Token-gated manual re-publish, reuses publishMenu()
 │   ├── commands/
 │   │   ├── subscribe.js           # /subscribe — campus picker → creates notify-menu-<campus> role
 │   │   ├── unsubscribe.js         # /unsubscribe — campus picker → deactivates subscription

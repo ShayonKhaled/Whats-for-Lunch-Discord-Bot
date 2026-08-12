@@ -36,4 +36,44 @@ function weekdaysBetween(afterDate, beforeDate) {
   return days;
 }
 
-module.exports = { CAMPUS_TZ, todayCampus, isWeekday, weekdaysBetween };
+/**
+ * Every calendar date from `fromDate` to `toDate`, inclusive at both ends,
+ * weekends included. Unlike weekdaysBetween this is for *display* — the
+ * dashboard shows a continuous run of days so a missing weekday is visible as
+ * a gap in a sequence rather than an absence you have to notice.
+ */
+function datesBetween(fromDate, toDate) {
+  const days = [];
+  const cursor = parseDate(fromDate);
+  const end = parseDate(toDate);
+
+  while (cursor <= end) {
+    days.push(cursor.toISOString().split('T')[0]);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/** YYYY-MM-DD `offset` days from `dateText` (negative goes back). */
+function shiftDate(dateText, offset) {
+  const d = parseDate(dateText);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().split('T')[0];
+}
+
+/** Weekday name for a YYYY-MM-DD date, resolved as a plain calendar date. */
+function dayName(dateText) {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(
+    parseDate(dateText)
+  );
+}
+
+module.exports = {
+  CAMPUS_TZ,
+  todayCampus,
+  isWeekday,
+  weekdaysBetween,
+  datesBetween,
+  shiftDate,
+  dayName,
+};

@@ -53,10 +53,7 @@ function buildFooter(campusNotes = []) {
  * 500); the lower is the base price, and the scraper is instructed to take it.
  * Curry, Ramen and Udon/Soba print a single price.
  *
- * Halal is UNVERIFIED — it is not served until September, so no halal row has
- * ever carried a listed price. Its student price is known to be ¥400, which the
- * fallback table supplies. When halal returns, check that the scraped base minus
- * 100 still lands on 400 before trusting the derived value.
+ * Halal is not derived at all — it is a flat ¥400, see FIXED_STUDENT_PRICES.
  *
  * Kameoka does not run the campaign, so its printed price is already what a
  * student pays — every tier there is zero.
@@ -68,10 +65,10 @@ const STUDENT_DISCOUNT = {
   Uzumasa: {
     'Set Meals': 100,
     'A La Carte': 100,
-    Halal: 100,
     Curry: 50,
     Noodles: 50,
     Sides: 0,
+    // Halal is deliberately absent — see FIXED_STUDENT_PRICES below.
   },
   Kameoka: {
     Set: 0,
@@ -83,10 +80,29 @@ const STUDENT_DISCOUNT = {
 };
 
 /**
- * Convert a listed (visitor) price into what a student actually pays.
- * @returns {number|null} null when there is no listed price to work from.
+ * Categories charged a flat price that does not follow the discount tiers.
+ *
+ * Halal is ¥400 at the Uzumasa payment machine regardless of the campaign
+ * (confirmed at the cafeteria itself). Deriving it would be fragile: halal does
+ * not return until September, so nobody has seen what the PDF prints for it,
+ * and if that turns out to be ¥400 rather than ¥500 a -100 tier would show
+ * ¥300 and undercharge on the menu. A fixed price is immune to that.
+ */
+const FIXED_STUDENT_PRICES = {
+  Uzumasa: {
+    Halal: 400,
+  },
+};
+
+/**
+ * What a student actually pays: a fixed price where one applies, otherwise the
+ * menu's base price minus the campaign tier.
+ * @returns {number|null} null when there is no price to work from.
  */
 function studentPrice(campus, category, listedPrice) {
+  const fixed = FIXED_STUDENT_PRICES[campus]?.[category];
+  if (fixed !== undefined) return fixed;
+
   if (listedPrice === null || listedPrice === undefined || listedPrice === '') return null;
   const discount = STUDENT_DISCOUNT[campus]?.[category] ?? 0;
   return Number(listedPrice) - discount;
@@ -102,6 +118,7 @@ module.exports = {
   HOURS,
   NOTICES,
   STUDENT_DISCOUNT,
+  FIXED_STUDENT_PRICES,
   hoursLine,
   buildFooter,
   studentPrice,

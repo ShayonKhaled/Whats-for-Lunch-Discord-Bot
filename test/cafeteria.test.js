@@ -154,16 +154,28 @@ test('Kameoka renders its listed price unchanged', () => {
   assert.match(chunk, /¥350/);
 });
 
-test('halal falls back to its known student price rather than a derived one', () => {
-  // Halal returns in September and has never carried a listed price, so the
-  // -100 tier is unverified for it. Until then the fallback table supplies the
-  // known ¥400; this pins that so a scraper change cannot silently alter it.
+test('halal is a flat 400 whatever the scraper reports', () => {
+  // Confirmed at the Uzumasa payment machine: halal is ¥400 always, campaign or
+  // not. Deriving it would be fragile — halal returns in September and nobody
+  // has seen what the PDF prints for it. These cases pin the price against any
+  // listed value the scraper might produce.
+  for (const listed of [null, 400, 500, 570]) {
+    assert.strictEqual(
+      studentPrice('Uzumasa', 'Halal', listed),
+      400,
+      `halal must be 400 even when the scraper reports ${listed}`
+    );
+  }
+});
+
+test('halal renders as 400 on the menu', () => {
   const [chunk] = formatMenuMessage([
     {
       campus: 'Uzumasa', menu_date: '2026-09-01', day_name: 'Tuesday',
       category: 'Halal', subcategory: 'Halal',
-      dish_name: 'Halal Chicken Curry', calories: 520, price: null,
+      dish_name: 'Halal Chicken Curry', calories: 520, price: 500,
     },
   ]);
   assert.match(chunk, /¥400/);
+  assert.doesNotMatch(chunk, /¥500/, 'the listed price must not leak through');
 });

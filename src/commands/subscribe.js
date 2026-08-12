@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { buildCampusSelector } = require('../interactions/campusSelector');
+const { POSTING_TIME } = require('../config/cafeteria');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,34 +15,34 @@ module.exports = {
       if (!interaction.guildId) {
         return interaction.reply({
           content: '⛔ This command can only be used in a server.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
       if (!interaction.channel.permissionsFor(interaction.client.user).has('SendMessages')) {
         return interaction.reply({
           content: '⛔ I don\'t have permission to send messages in this channel.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
       if (!interaction.guild.members.me.permissions.has('ManageRoles')) {
         return interaction.reply({
           content: '⛔ I need the **Manage Roles** permission to create the notification role.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
       return interaction.reply({
         content: 'Which campus would you like to subscribe to?',
         components: [buildCampusSelector('subscribe')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch (error) {
       logger.error(`Error in subscribe command: ${error.message}`);
       return interaction.reply({
         content: '❌ Something went wrong. Please try again later.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
@@ -88,9 +89,8 @@ module.exports = {
       await interaction.followUp({
         content:
           `✅ **${campus} Campus Menu Bot Subscribed**\n` +
-          `Menu updates will be posted in <#${channelId}> every weekday at **6:00 AM JST**.\n\n` +
+          `Menu updates will be posted in <#${channelId}> every weekday at **${POSTING_TIME}**.\n\n` +
           `📣 Members can use \`/notify\` to opt in or out of the <@&${role.id}> ping.`,
-        ephemeral: false,
       });
     } catch (error) {
       logger.error(`Error in subscribe command (${campus}): ${error.message}`);

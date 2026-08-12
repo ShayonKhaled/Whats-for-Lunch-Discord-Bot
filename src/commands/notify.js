@@ -1,7 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { buildCampusSelector } = require('../interactions/campusSelector');
+const { POSTING_TIME } = require('../config/cafeteria');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,14 +13,14 @@ module.exports = {
     if (!interaction.guildId) {
       return interaction.reply({
         content: '⛔ This command can only be used in a server.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     return interaction.reply({
       content: 'Which campus would you like to toggle notifications for?',
       components: [buildCampusSelector('notify')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 
@@ -57,7 +58,7 @@ module.exports = {
         await member.roles.add(role);
         logger.info(`🔔 Added ${role.name} role to ${member.user.tag} in ${interaction.guild.name}`);
         return interaction.editReply({
-          content: `🔔 You're in — you'll be pinged every weekday at 6:00 AM JST when the ${campus} Campus menu is posted.`,
+          content: `🔔 You're in — you'll be pinged every weekday at ${POSTING_TIME} when the ${campus} Campus menu is posted.`,
         });
       }
     } catch (error) {

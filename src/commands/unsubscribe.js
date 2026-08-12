@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { buildCampusSelector } = require('../interactions/campusSelector');
@@ -13,14 +13,14 @@ module.exports = {
     if (!interaction.guildId) {
       return interaction.reply({
         content: '⛔ This command can only be used in a server.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     return interaction.reply({
       content: 'Which campus would you like to unsubscribe from?',
       components: [buildCampusSelector('unsubscribe')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 
@@ -46,7 +46,6 @@ module.exports = {
       // Public confirmation for the channel
       await interaction.followUp({
         content: `✅ ${campus} Campus menu updates will no longer be posted here.`,
-        ephemeral: false,
       });
     } catch (error) {
       logger.error(`Error in unsubscribe command (${campus}): ${error.message}`);

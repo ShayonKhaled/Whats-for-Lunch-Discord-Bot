@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
 const db = require('./db');
 const logger = require('./utils/logger');
 const { handleRatingInteraction } = require('./interactions/rateMenu');
@@ -92,14 +92,14 @@ client.on('interactionCreate', async (interaction) => {
 
   if (!command) {
     logger.warn(`⚠️ Command not found: ${interaction.commandName}`);
-    return interaction.reply({ content: '❌ Command not found.', ephemeral: true });
+    return interaction.reply({ content: '❌ Command not found.', flags: MessageFlags.Ephemeral });
   }
 
   try {
     await command.execute(interaction);
   } catch (error) {
     logger.error(`Error executing command ${interaction.commandName}: ${error.message}`);
-    const reply = { content: '❌ There was an error executing this command.', ephemeral: true };
+    const reply = { content: '❌ There was an error executing this command.', flags: MessageFlags.Ephemeral };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(reply);
     } else {

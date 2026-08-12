@@ -71,8 +71,9 @@ test('rendered menus pick up the configured hours', () => {
 
 test('Uzumasa listed prices convert to the previously hardcoded student prices', () => {
   const cases = [
-    // The PDF prints two prices for these two sections (430 above 500); the
-    // scraper is instructed to take the lower, which is the base price.
+    // Confirmed at the cafeteria: a set meal is ¥430 for visitors and staff,
+    // and students pay ¥330 after the ¥100 campaign discount. The PDF prints
+    // two prices for these sections (430 above 500); the scraper takes the lower.
     ['Set Meals', 430, 330, 'Campus Lunch — 100 off'],
     ['A La Carte', 430, 330, 'à la carte — 100 off'],
     ['Curry', 380, 330, 'curry — 50 off'],

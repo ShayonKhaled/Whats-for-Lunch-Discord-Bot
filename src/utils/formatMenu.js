@@ -9,11 +9,15 @@
  * @param {string}   [campus]     - 'Uzumasa' (default) or 'Kameoka'.
  */
 
-const { buildFooter } = require('../config/cafeteria');
+const { buildFooter, studentPrice } = require('../config/cafeteria');
 
 // ── Uzumasa menu config ─────────────────────────────────────────────────────
 
-const UZUMASA_PRICES = {
+// Transitional fallback. Uzumasa's scraper does not yet extract price, so until
+// it does these student prices stand in for rows with a NULL price. They are
+// already post-discount, so no tier is applied to them. Delete this table once
+// the Uzumasa workflow has been carrying prices for a full menu cycle.
+const UZUMASA_FALLBACK_PRICES = {
   'Campus Lunch (1)': 330,
   'Campus Lunch (2)': 330,
   'Halal':            400,
@@ -94,7 +98,15 @@ const CAMPUS_CONFIG = {
     categoryEmojis: UZUMASA_CATEGORY_EMOJIS,
     setMealSubcategories: UZUMASA_SET_MEAL_SUBCATEGORIES,
     headerTitle: 'Uzumasa Campus',
-    priceLookup(item) { return UZUMASA_PRICES[item.subcategory] ?? null; },
+    // Scraped listed price minus the student tier; the hardcoded table is only
+    // a stand-in for rows the scraper has not priced yet.
+    priceLookup(item) {
+      return (
+        studentPrice('Uzumasa', item.category, item.price) ??
+        UZUMASA_FALLBACK_PRICES[item.subcategory] ??
+        null
+      );
+    },
     showSetMealNote: true,
     footerText: buildFooter([
       'Prices are part of a cafeteria discount campaign sponsored by the Student Guardian Association and are available to students only. Faculty and staff members are not eligible for this discounted price.',
@@ -107,7 +119,10 @@ const CAMPUS_CONFIG = {
     categoryEmojis: KAMEOKA_CATEGORY_EMOJIS,
     setMealSubcategories: new Set(), // Kameoka doesn't have free-side-dish set meals
     headerTitle: 'Kameoka Campus',
-    priceLookup(item) { return item.price ?? null; },  // from DB `price` column
+    // Kameoka runs no discount campaign, so every tier is zero and this is the
+    // listed price unchanged — routed through studentPrice so both campuses
+    // share one code path.
+    priceLookup(item) { return studentPrice('Kameoka', item.category, item.price); },
     showSetMealNote: false,
     footerText: buildFooter(),
     categoryLabels: KAMEOKA_CATEGORY_LABELS,
@@ -216,7 +231,7 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
     // Section-level price (when all subcategories share the same price)
     const sectionPrices = new Set(
       section.items
-        .map((item) => config.priceLookup({ subcategory: item.entry.subcategoryName, price: item.dishes[0].price }))
+        .map((item) => config.priceLookup({ category: item.entry.categoryName, subcategory: item.entry.subcategoryName, price: item.dishes[0].price }))
         .filter((price) => typeof price === 'number')
     );
     const sharedSectionPrice = sectionPrices.size === 1 ? [...sectionPrices][0] : null;
@@ -240,7 +255,7 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
       const subPriceStr = sharedSectionPrice
         ? ''
         : (() => {
-            const price = config.priceLookup({ subcategory: item.entry.subcategoryName, price: item.dishes[0].price });
+            const price = config.priceLookup({ category: item.entry.categoryName, subcategory: item.entry.subcategoryName, price: item.dishes[0].price });
             const isSetMeal = config.setMealSubcategories.has(item.entry.subcategoryName);
             return price ? `  ·  ¥${price}${config.showSetMealNote && isSetMeal ? ' (+ 1 side/salad)' : ''}` : '';
           })();

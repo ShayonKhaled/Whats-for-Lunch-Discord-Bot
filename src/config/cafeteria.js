@@ -40,4 +40,62 @@ function buildFooter(campusNotes = []) {
   return [hoursLine(), ...NOTICES.map((n) => `*${n}*`), ...campusNotes.map((n) => `*${n}*`)].join('\n\n');
 }
 
-module.exports = { POSTING_TIME, HOURS, NOTICES, hoursLine, buildFooter };
+/**
+ * Cafeteria Discount Campaign — students only, and Uzumasa only.
+ *
+ * The weekly menu PDFs print the *visitor/faculty* price. Uzumasa students pay
+ * that minus the amounts below, per the campaign notice: 100 yen off lunch and
+ * à la carte, 50 yen off curry and noodles, nothing off sides. Verified against
+ * the 2026-08-18 PDF, where every listed price minus the tier below reproduces
+ * the prices this bot had hardcoded (¥430→330, ¥500→400, ¥380→330, ¥300→250,
+ * ¥250→200, ¥70→70).
+ *
+ * Kameoka does not run the campaign, so its printed price is already what a
+ * student pays — every tier there is zero.
+ *
+ * Keyed by the `category` column in menu_items. A category with no entry is
+ * treated as undiscounted.
+ */
+const STUDENT_DISCOUNT = {
+  Uzumasa: {
+    'Set Meals': 100,
+    'A La Carte': 100,
+    Halal: 100,
+    Curry: 50,
+    Noodles: 50,
+    Sides: 0,
+  },
+  Kameoka: {
+    Set: 0,
+    'Live Kitchen': 0, // counter service — its own tier, currently undiscounted
+    Curry: 0,
+    Ramen: 0,
+    'Side Dish': 0,
+  },
+};
+
+/**
+ * Convert a listed (visitor) price into what a student actually pays.
+ * @returns {number|null} null when there is no listed price to work from.
+ */
+function studentPrice(campus, category, listedPrice) {
+  if (listedPrice === null || listedPrice === undefined || listedPrice === '') return null;
+  const discount = STUDENT_DISCOUNT[campus]?.[category] ?? 0;
+  return Number(listedPrice) - discount;
+}
+
+/** Whether a campus runs the discount campaign — drives the footer disclaimer. */
+function hasStudentDiscount(campus) {
+  return Object.values(STUDENT_DISCOUNT[campus] || {}).some((amount) => amount > 0);
+}
+
+module.exports = {
+  POSTING_TIME,
+  HOURS,
+  NOTICES,
+  STUDENT_DISCOUNT,
+  hoursLine,
+  buildFooter,
+  studentPrice,
+  hasStudentDiscount,
+};

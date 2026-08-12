@@ -1,7 +1,9 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { buildCampusSelector } = require('../interactions/campusSelector');
+const { CAMPUS_TZ } = require('../utils/campusDate');
+const { POSTING_TIME } = require('../config/cafeteria');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,7 +14,7 @@ module.exports = {
     return interaction.reply({
       content: 'Which campus would you like to check?',
       components: [buildCampusSelector('status')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 
@@ -29,7 +31,10 @@ module.exports = {
         });
       }
 
+      // Rendered in the campus timezone — the host runs UTC, so without this the
+      // date can read as the previous day for anyone actually on campus.
       const subscribedDate = new Date(subscription.subscribed_at).toLocaleDateString('en-US', {
+        timeZone: CAMPUS_TZ,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -38,7 +43,7 @@ module.exports = {
       let statusMessage = `✅ **${campus} Campus Status**
 Channel: <#${subscription.channel_id}>
 Subscribed: ${subscribedDate}
-Next update: 6:00 AM JST (Mon-Fri)`;
+Next update: ${POSTING_TIME} (Mon-Fri)`;
 
       // Show other campus subscription info if it exists
       const allSubs = await db.getSubscriptionsByGuildId(guildId);

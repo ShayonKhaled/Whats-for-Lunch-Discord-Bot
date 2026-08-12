@@ -238,7 +238,8 @@ async function handleStarSelect(interaction) {
       interaction.user.id,
       menuDate,
       dishName,
-      rating
+      rating,
+      campus
     );
 
     logger.info(

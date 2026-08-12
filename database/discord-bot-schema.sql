@@ -24,12 +24,16 @@ CREATE TABLE IF NOT EXISTS menu_items (
 );
 
 -- Guild subscriptions managed by the bot slash commands.
+-- NOTE: snowflake IDs are TEXT here but BIGINT in dish_ratings and
+-- bot_delivery_log. The application casts around it (`$1::bigint`). Left as-is
+-- deliberately: converting a live primary key is real risk for no functional
+-- gain. Documented so the inconsistency is known rather than surprising.
 CREATE TABLE IF NOT EXISTS guild_subscriptions (
-  guild_id        VARCHAR(20) NOT NULL,
+  guild_id        TEXT NOT NULL,
   guild_name      TEXT NOT NULL,
-  channel_id      VARCHAR(20) NOT NULL,
+  channel_id      TEXT NOT NULL,
   channel_name    TEXT,
-  role_id         VARCHAR(20),             -- ID of the auto-created notify-menu role
+  role_id         TEXT,                    -- ID of the auto-created notify-menu role
   campus          VARCHAR(50) NOT NULL DEFAULT 'Uzumasa',  -- 'Uzumasa' or 'Kameoka'
   is_active       BOOLEAN DEFAULT TRUE,
   subscribed_at   TIMESTAMP DEFAULT NOW(),
@@ -64,7 +68,10 @@ CREATE TABLE IF NOT EXISTS dish_ratings (
   user_id     BIGINT NOT NULL,
   menu_date   TEXT NOT NULL,               -- 'YYYY-MM-DD'
   dish_name   TEXT NOT NULL,
-  rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  rated_at    TIMESTAMP DEFAULT NOW(),
+  rating      SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  campus      VARCHAR(50),                 -- see migrations/add_campus_to_dish_ratings.sql
+  rated_at    TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT unique_rating UNIQUE (dish_name, menu_date, guild_id, user_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_dish_ratings_campus_dish ON dish_ratings (campus, dish_name);

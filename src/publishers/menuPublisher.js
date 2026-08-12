@@ -6,6 +6,7 @@ const { formatMenuMessage } = require('../utils/formatMenu');
 // Imported as a namespace rather than destructured so the push can be observed
 // in tests — the delivery status it reports is now load-bearing.
 const uptimeKuma = require('../utils/uptimeKuma');
+const { POSTING_TIME } = require('../config/cafeteria');
 const { todayCampus } = require('../utils/campusDate');
 
 let scheduledJob = null;
@@ -72,7 +73,7 @@ async function publishMenu(client) {
 
       // Fetch aggregate ratings
       const dishNames = [...new Set(menuItems.map((d) => d.dish_name))];
-      const ratingsMap = await db.getRatingsForDishes(dishNames);
+      const ratingsMap = await db.getRatingsForDishes(dishNames, campus);
       if (ratingsMap.size > 0) {
         logger.info(`⭐ Loaded ratings for ${ratingsMap.size} dish(es) from ${campus} Campus`);
       }
@@ -227,7 +228,7 @@ function start(client) {
     }
   );
 
-  logger.info('✅ Menu publisher scheduled (6:00 AM JST, Mon-Fri)');
+  logger.info(`✅ Menu publisher scheduled (${POSTING_TIME}, Mon-Fri)`);
 }
 
 function stop() {

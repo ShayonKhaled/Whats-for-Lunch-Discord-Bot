@@ -221,15 +221,15 @@ async function getSubscriptionByGuildId(guildId, campus) {
  * Upsert a rating. Returns the saved row.
  * One rating per user per dish per day per guild — repeated calls update it.
  */
-async function upsertRating(guildId, userId, menuDate, dishName, rating) {
+async function upsertRating(guildId, userId, menuDate, dishName, rating, campus) {
   try {
     const result = await pool.query(
-      `INSERT INTO dish_ratings (guild_id, user_id, menu_date, dish_name, rating)
-       VALUES ($1::bigint, $2::bigint, $3::text, $4, $5)
+      `INSERT INTO dish_ratings (guild_id, user_id, menu_date, dish_name, rating, campus)
+       VALUES ($1::bigint, $2::bigint, $3::text, $4, $5, $6)
        ON CONFLICT (dish_name, menu_date, guild_id, user_id)
-       DO UPDATE SET rating = EXCLUDED.rating, rated_at = NOW()
+       DO UPDATE SET rating = EXCLUDED.rating, campus = EXCLUDED.campus, rated_at = NOW()
        RETURNING *`,
-      [guildId, userId, menuDate, dishName, rating]
+      [guildId, userId, menuDate, dishName, rating, campus ?? null]
     );
     logger.debug(`⭐ Rating saved: "${dishName}" = ${rating} by user=${userId} guild=${guildId}`);
     return result.rows[0];
@@ -245,17 +245,24 @@ async function upsertRating(guildId, userId, menuDate, dishName, rating) {
  *
  * Used by formatMenu to decorate recurring dishes.
  */
-async function getRatingsForDishes(dishNames) {
+async function getRatingsForDishes(dishNames, campus) {
   if (!dishNames || dishNames.length === 0) return new Map();
   try {
+    // Scoped to the campus: dish names collide across campuses ('Pork Cutlet',
+    // 'Miso Ramen', …), and without this a rating given at one was shown on the
+    // other's menu. Rows predating the campus column are NULL and are included
+    // for the campus they were backfilled to, or ignored if unattributable.
+    // Aggregation across dates and guilds is intentional — the point is to
+    // decorate dishes that recur.
     const result = await pool.query(
       `SELECT dish_name,
               ROUND(AVG(rating)::numeric, 1) AS avg_rating,
               COUNT(*)::int                  AS rating_count
        FROM dish_ratings
        WHERE dish_name = ANY($1)
+         AND ($2::text IS NULL OR campus = $2::text)
        GROUP BY dish_name`,
-      [dishNames]
+      [dishNames, campus ?? null]
     );
     const map = new Map();
     for (const row of result.rows) {

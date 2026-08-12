@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { formatMenuMessage } = require('../utils/formatMenu');
@@ -14,7 +14,7 @@ module.exports = {
     return interaction.reply({
       content: 'Which campus would you like to preview?',
       components: [buildCampusSelector('preview')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 
@@ -32,7 +32,7 @@ module.exports = {
 
       // Fetch aggregate ratings for all dishes in today's menu
       const dishNames = [...new Set(menuItems.map((d) => d.dish_name))];
-      const ratingsMap = await db.getRatingsForDishes(dishNames);
+      const ratingsMap = await db.getRatingsForDishes(dishNames, campus);
 
       const chunks = formatMenuMessage(menuItems, ratingsMap, campus);
 
@@ -59,7 +59,7 @@ module.exports = {
       for (let i = 1; i < chunks.length; i++) {
         await interaction.followUp({
           content: chunks[i],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
     } catch (error) {

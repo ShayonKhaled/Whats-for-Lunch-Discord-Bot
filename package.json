@@ -8,8 +8,8 @@
     "dev": "NODE_ENV=development node src/bot.js",
     "register": "node scripts/registerGlobalCommands.js",
     "publishNow": "node scripts/publishNow.js",
-    "test": "node --test test/",
-    "test:watch": "node --test --watch test/",
+    "test": "node --test test/*.test.js",
+    "test:watch": "node --test --watch test/*.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

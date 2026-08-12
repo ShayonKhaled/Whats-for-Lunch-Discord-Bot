@@ -50,8 +50,11 @@ function buildFooter(campusNotes = []) {
  * hardcoded (¥430→330, ¥380→330, ¥300→250, ¥250→200, ¥70→70).
  *
  * Note the PDF prints TWO prices for Set Meals and A La Carte (e.g. 430 above
- * 500); the lower is the base price, and the scraper is instructed to take it.
- * Curry, Ramen and Udon/Soba print a single price.
+ * 500). The lower is the visitor/staff price — confirmed at the cafeteria: a
+ * set meal is ¥430 for visitors and staff, and students pay ¥330 after the
+ * ¥100 campaign discount. The scraper is instructed to take the lower of the
+ * two; what the higher figure represents is still unknown, but it is never
+ * used. Curry, Ramen and Udon/Soba print a single price.
  *
  * Halal is not derived at all — it is a flat ¥400, see FIXED_STUDENT_PRICES.
  *

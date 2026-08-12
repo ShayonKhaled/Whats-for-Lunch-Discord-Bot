@@ -3,7 +3,9 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { formatMenuMessage } = require('../utils/formatMenu');
-const { push: pingUptimeKuma } = require('../utils/uptimeKuma');
+// Imported as a namespace rather than destructured so the push can be observed
+// in tests — the delivery status it reports is now load-bearing.
+const uptimeKuma = require('../utils/uptimeKuma');
 const { todayCampus } = require('../utils/campusDate');
 
 let scheduledJob = null;
@@ -33,6 +35,10 @@ async function publishMenu(client) {
     let successCount = 0;
     let skipCount = 0;
     let failCount = 0;
+    // Did *any* campus have a menu to publish? Distinguishes "the cafeteria is
+    // closed" from "we had a menu and still delivered nothing" — the second is
+    // the failure mode that went unnoticed for five days in August.
+    let anyMenuAvailable = false;
 
     for (const [campus, subs] of Object.entries(byCampus)) {
       logger.info(`🍽️ Processing ${campus} Campus — ${subs.length} subscriber(s)`);
@@ -42,8 +48,25 @@ async function publishMenu(client) {
 
       if (!menuItems || menuItems.length === 0) {
         logger.warn(`⚠️ No menu items found for ${campus} Campus today — skipping`);
+        // Record the skip so a silent no-post day is visible in the delivery
+        // log rather than looking identical to the publisher never running.
+        for (const subscription of subs) {
+          await db
+            .logDelivery(
+              subscription.guild_id,
+              subscription.channel_id,
+              campus,
+              today,
+              'skipped',
+              'No menu published for this date'
+            )
+            .catch((err) => logger.error(`Failed to log skip: ${err.message}`));
+        }
+        skipCount += subs.length;
         continue;
       }
+
+      anyMenuAvailable = true;
 
       logger.info(`📋 Found ${menuItems.length} menu items for ${campus} Campus`);
 
@@ -128,20 +151,48 @@ async function publishMenu(client) {
 
     logger.info(`📊 Publisher summary: ${successCount} sent, ${skipCount} skipped, ${failCount} failed`);
 
-    // Ping Uptime Kuma — tells it the menu publisher ran, with delivery counts as query params
+    // Ping Uptime Kuma. Reporting "up" unconditionally is what let five days of
+    // zero deliveries look healthy, so the status now reflects the outcome.
+    //
+    // Down only when a menu existed and nothing reached anyone — that is
+    // unambiguously broken. Zero deliveries with no menu published is the
+    // cafeteria being closed, which is expected and must not page anyone.
     const menuPushUrl = process.env.UPTIME_KUMA_MENU_PUSH_URL;
     if (menuPushUrl) {
-      const url = `${menuPushUrl}?status=up&msg=${successCount}%20sent%2C%20${failCount}%20failed`;
-      pingUptimeKuma(url, 'menu-delivery');
+      const deliveryFailed = anyMenuAvailable && successCount === 0;
+      const status = deliveryFailed ? 'down' : 'up';
+
+      let msg;
+      if (deliveryFailed) {
+        msg = `menu published but 0 delivered (${skipCount} skipped, ${failCount} failed)`;
+      } else if (!anyMenuAvailable) {
+        msg = 'no menu published for today — cafeteria closed';
+      } else {
+        msg = `${successCount} sent, ${skipCount} skipped, ${failCount} failed`;
+      }
+
+      if (deliveryFailed) {
+        logger.error(`🚨 ${msg} — reporting DOWN to Uptime Kuma`);
+      }
+
+      const url = `${menuPushUrl}?status=${status}&msg=${encodeURIComponent(msg)}`;
+      uptimeKuma.push(url, 'menu-delivery');
     }
 
-    if (failCount > 0 && process.env.BOT_ADMIN_ID) {
+    // A total delivery failure is more serious than some guilds failing, so it
+    // gets its own alert — the August outage produced zero `failed` rows and
+    // therefore never tripped the failCount check below.
+    const totalFailure = anyMenuAvailable && successCount === 0;
+
+    if ((failCount > 0 || totalFailure) && process.env.BOT_ADMIN_ID) {
+      const content = totalFailure
+        ? `🚨 **Menu Publisher — nothing delivered**\nA menu was published for ${today} but **no guild received it** (${skipCount} skipped, ${failCount} failed).\nCheck the delivery log and the publisher's date handling.`
+        : `⚠️ **Menu Publisher Alert**\n${failCount} guild(s) failed to receive today's menu.\nCheck bot permissions and channel availability.`;
+
       try {
         const admin = await client.users.fetch(process.env.BOT_ADMIN_ID);
         if (admin) {
-          await admin.send({
-            content: `⚠️ **Menu Publisher Alert**\n${failCount} guild(s) failed to receive today's menu.\nCheck bot permissions and channel availability.`,
-          });
+          await admin.send({ content });
         }
       } catch (error) {
         logger.warn(`Could not send admin alert: ${error.message}`);

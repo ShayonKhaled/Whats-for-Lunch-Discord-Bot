@@ -179,8 +179,10 @@ async function hasSuccessfulDelivery(guildId, campus, menuDate) {
 async function logDelivery(guildId, channelId, campus, menuDate, status, errorMessage) {
   try {
     await pool.query(
-      `INSERT INTO bot_delivery_log (guild_id, channel_id, campus, menu_date, status, error_message)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      // delivered_at is set explicitly: the live table has no DEFAULT on it,
+      // so every row written since 2026-06-16 landed with a NULL timestamp.
+      `INSERT INTO bot_delivery_log (guild_id, channel_id, campus, menu_date, status, error_message, delivered_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (guild_id, campus, menu_date) DO UPDATE
          SET status = EXCLUDED.status,
              error_message = EXCLUDED.error_message,
@@ -293,6 +295,51 @@ async function getUserRatingsForDate(guildId, userId, menuDate) {
   }
 }
 
+/** All menu rows in a date window — used by the data-quality check. */
+async function getMenuItemsBetween(fromDate, toDate) {
+  try {
+    const result = await pool.query(
+      `SELECT campus, menu_date, category, subcategory, dish_name, price
+         FROM menu_items
+        WHERE menu_date::date BETWEEN $1::date AND $2::date
+        ORDER BY menu_date, campus`,
+      [fromDate, toDate]
+    );
+    return result.rows;
+  } catch (err) {
+    logger.error(`Error fetching menu items between ${fromDate} and ${toDate}: ${err.message}`);
+    throw err;
+  }
+}
+
+/** Cheap liveness probe for the health endpoint. Throws if the DB is unreachable. */
+async function ping() {
+  await pool.query('SELECT 1');
+}
+
+/**
+ * Most recent menu_date that was successfully delivered to anyone.
+ * Surfaced by the health endpoint so "connected but posting nothing" is visible.
+ */
+async function getLastSuccessfulDelivery() {
+  try {
+    const result = await pool.query(
+      // COALESCE because rows written between 2026-06-16 and the fix above
+      // have a NULL delivered_at; created_at is populated on every row.
+      `SELECT menu_date, MAX(COALESCE(delivered_at, created_at)) AS delivered_at
+       FROM bot_delivery_log
+       WHERE status = 'success'
+       GROUP BY menu_date
+       ORDER BY menu_date DESC
+       LIMIT 1`
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    logger.error(`Error fetching last delivery: ${err.message}`);
+    return null;
+  }
+}
+
 async function closeConnection() {
   if (pool) {
     await pool.end();
@@ -312,6 +359,10 @@ module.exports = {
   hasSuccessfulDelivery,
   logDelivery,
   getSubscriptionByGuildId,
+  // health & data quality
+  ping,
+  getLastSuccessfulDelivery,
+  getMenuItemsBetween,
   // ratings
   upsertRating,
   getRatingsForDishes,

@@ -37,16 +37,23 @@ CREATE TABLE IF NOT EXISTS guild_subscriptions (
   PRIMARY KEY (guild_id, campus)
 );
 
--- Prevents duplicate daily menu posts.
+-- Prevents duplicate daily menu posts, and records why a day produced no post.
+--
+-- NOTE: this definition was corrected on 2026-08-12 to match the live table,
+-- which had drifted — production has no `id` column, uses BIGINT for the
+-- Discord snowflakes, and carries both created_at and delivered_at. The old
+-- definition here claimed a DEFAULT on delivered_at that production does not
+-- have, which is why rows written after 2026-06-16 had a NULL timestamp until
+-- logDelivery was changed to set it explicitly.
 CREATE TABLE IF NOT EXISTS bot_delivery_log (
-  id            SERIAL PRIMARY KEY,
-  guild_id      VARCHAR(20) NOT NULL,
-  channel_id    VARCHAR(20) NOT NULL,
+  guild_id      BIGINT NOT NULL,
+  channel_id    BIGINT,
   campus        VARCHAR(50) NOT NULL DEFAULT 'Uzumasa',  -- 'Uzumasa' or 'Kameoka'
   menu_date     TEXT NOT NULL,
   status        TEXT NOT NULL,             -- 'success', 'failed', 'skipped'
-  error_message TEXT,
-  delivered_at  TIMESTAMP DEFAULT NOW(),
+  error_message TEXT,                      -- reason, e.g. 'No menu published for this date'
+  created_at    TIMESTAMP DEFAULT NOW(),
+  delivered_at  TIMESTAMPTZ,               -- no default: set explicitly by logDelivery()
   CONSTRAINT unique_delivery UNIQUE (guild_id, campus, menu_date)
 );
 

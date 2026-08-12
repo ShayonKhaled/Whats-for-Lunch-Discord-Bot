@@ -3,7 +3,29 @@ const assert = require('node:assert');
 const { mock } = require('node:test');
 
 const db = require('../src/db');
+const uptimeKuma = require('../src/utils/uptimeKuma');
 const { publishMenu } = require('../src/publishers/menuPublisher');
+
+const PUSH_URL = 'https://uptime.example/api/push/token';
+
+/** Capture Uptime Kuma pushes and return the parsed status/msg of the last one. */
+function capturePush() {
+  const urls = [];
+  mock.method(uptimeKuma, 'push', async (url) => {
+    urls.push(url);
+  });
+  return {
+    urls,
+    last() {
+      if (urls.length === 0) return null;
+      const parsed = new URL(urls[urls.length - 1]);
+      return {
+        status: parsed.searchParams.get('status'),
+        msg: parsed.searchParams.get('msg'),
+      };
+    },
+  };
+}
 
 // 21:00 UTC on the 12th is 06:00 JST on the 13th — the exact instant the
 // scheduler fires, and the instant at which the old UTC-based code resolved
@@ -181,18 +203,95 @@ test('each campus is delivered independently', async () => {
   );
 });
 
-// Documents today's behaviour so that changing it is a deliberate decision.
-// A campus with no menu produces no delivery-log row at all, which is why the
-// August outage left no trace — see the 'skipped' status in the schema.
-test('a campus with no menu writes no delivery-log row', async () => {
-  const calls = mockDb({ items: [] });
+test('a campus with no menu records a skipped row per subscriber', async () => {
+  const calls = mockDb({
+    items: [],
+    subs: [
+      subscription({ guild_id: '111' }),
+      subscription({ guild_id: '222' }),
+    ],
+  });
   const { client, sent } = makeClient();
 
   await publishMenu(client);
 
-  assert.strictEqual(sent.length, 0);
-  assert.strictEqual(calls.logged.length, 0);
-  assert.strictEqual(calls.deliveryChecks.length, 0);
+  assert.strictEqual(sent.length, 0, 'nothing to send');
+  assert.strictEqual(calls.deliveryChecks.length, 0, 'no point checking for duplicates');
+
+  // Without these rows a silent no-post day is indistinguishable from the
+  // publisher never having run — which is what hid the August outage.
+  assert.strictEqual(calls.logged.length, 2);
+  for (const row of calls.logged) {
+    assert.strictEqual(row.status, 'skipped');
+    assert.strictEqual(row.menuDate, JST_DATE);
+    assert.match(row.error, /No menu published/i);
+  }
+});
+
+// ── Uptime Kuma signalling ───────────────────────────────────────────────────
+// Reporting "up" unconditionally is what let five days of zero deliveries look
+// healthy. The status must now reflect the outcome — without paging during a
+// legitimate cafeteria closure.
+
+test('reports up when menus are delivered', async () => {
+  process.env.UPTIME_KUMA_MENU_PUSH_URL = PUSH_URL;
+  mockDb();
+  const push = capturePush();
+  const { client } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(push.last().status, 'up');
+  assert.match(push.last().msg, /1 sent/);
+});
+
+test('reports DOWN when a menu existed but nothing was delivered', async () => {
+  // The August failure exactly: menu present, duplicate guard skipped everyone.
+  process.env.UPTIME_KUMA_MENU_PUSH_URL = PUSH_URL;
+  mockDb({ alreadySent: true });
+  const push = capturePush();
+  const { client } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(push.last().status, 'down', 'a published menu reaching nobody is a failure');
+  assert.match(push.last().msg, /0 delivered/);
+});
+
+test('reports up — not down — when the cafeteria is simply closed', async () => {
+  // No menu published means zero deliveries is correct. Paging here would have
+  // meant a week of false alarms over the August closure.
+  process.env.UPTIME_KUMA_MENU_PUSH_URL = PUSH_URL;
+  mockDb({ items: [] });
+  const push = capturePush();
+  const { client } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(push.last().status, 'up');
+  assert.match(push.last().msg, /closed/i);
+});
+
+test('reports down when every guild fails to receive the menu', async () => {
+  process.env.UPTIME_KUMA_MENU_PUSH_URL = PUSH_URL;
+  mockDb();
+  const push = capturePush();
+  const { client } = makeClient({ channelMissing: true });
+
+  await publishMenu(client);
+
+  assert.strictEqual(push.last().status, 'down');
+});
+
+test('no ping is attempted when no push URL is configured', async () => {
+  delete process.env.UPTIME_KUMA_MENU_PUSH_URL;
+  mockDb();
+  const push = capturePush();
+  const { client } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(push.urls.length, 0);
 });
 
 test('a publisher error does not reject — it is caught and logged', async () => {

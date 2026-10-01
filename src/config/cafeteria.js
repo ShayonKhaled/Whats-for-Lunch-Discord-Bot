@@ -6,26 +6,28 @@
  * notify, subscribe and status, so a schedule change meant editing several
  * files and shipping a release — twice in one day, on 2026-08-12.
  *
- * Editing this file is the whole change.
+ * Editing this file is the whole change — and undoing it afterwards: vacation
+ * mode was entered and left by editing HOURS and NOTICES here.
  */
 
 // When the publisher posts. Must stay in step with the cron rule in
 // menuPublisher.start() — this is the human-readable half of that.
 const POSTING_TIME = '6:00 AM JST';
 
+// The normal (term-time) schedule. During the vacation period these became
+// tickets and service both at 11:30 AM, closing 1:30 PM.
 const HOURS = {
-  ticketsFrom: '11:30 AM',
-  opens: '11:30 AM',
-  closes: '1:30 PM',
+  ticketsFrom: '10:30 AM',
+  opens: '11:00 AM',
+  closes: '2:00 PM',
 };
 
 /**
- * Notices appended to every menu, in order. Set to [] when the cafeteria
- * returns to its normal schedule.
+ * Notices appended to every menu, in order. Empty since the cafeteria returned
+ * to its normal schedule — add a line here for the next closure, and clear it
+ * again when that ends.
  */
-const NOTICES = [
-  'Please note that the cafeteria is operating on a reduced schedule during the vacation period.',
-];
+const NOTICES = [];
 
 /** The hours line shown at the foot of each menu. */
 function hoursLine() {

@@ -3,7 +3,7 @@
 ![Status](https://img.shields.io/badge/status-stable-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria menus to subscribed servers every weekday at 9:00 AM JST. Reads from the same PostgreSQL database populated by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) and delivers it to any number of Discord servers independently.
+A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria menus to subscribed servers every weekday at 6:00 AM JST. Reads from the same PostgreSQL database populated by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) and delivers it to any number of Discord servers independently.
 
 ---
 
@@ -31,7 +31,7 @@ A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria men
          ▼
 [Discord Bot: src/bot.js]
          │
-         ├─ 9:00 AM JST, Mon–Fri → menuPublisher.js
+         ├─ 6:00 AM JST, Mon–Fri → menuPublisher.js
          │         ├─ getActiveSubscriptions() → groups by campus
          │         ├─ getTodayMenu(campus) → per-campus menu fetch
          │         ├─ formatMenuMessage(…, campus) → campus-specific formatting
@@ -143,7 +143,7 @@ CREATE TABLE dish_ratings (
 ## Key Technical Details
 
 **Menu Publisher** (`src/publishers/menuPublisher.js`)
-- Scheduled with `node-schedule` at `0 9 * * 1-5`, timezone `Asia/Tokyo`
+- Scheduled with `node-schedule` at `0 6 * * 1-5`, timezone `Asia/Tokyo`
 - Groups active subscriptions by campus, fetches each campus's menu once
 - Skips guild+campus combos that already have a `success` log entry for today
 - Mentions the guild's `notify-menu-<campus>` role on the first message chunk only
@@ -287,7 +287,7 @@ endpoint, via the `X-Dashboard-Token` header or a `?token=` parameter; the page
 prompts for it and keeps it in `sessionStorage`. An unset token never authorises
 a write.
 
-Re-publishing calls the same `publishMenu()` the 9:00 AM scheduler uses, so the
+Re-publishing calls the same `publishMenu()` the 6:00 AM scheduler uses, so the
 existing "already delivered" guard applies: pressing the button twice retries the
 guilds that failed rather than double-posting to the ones that succeeded.
 
@@ -322,7 +322,7 @@ wfl-bot/
 │   │   ├── preview.js             # /preview — campus picker → today's menu (ephemeral)
 │   │   └── nextmenu.js            # /nextmenu — campus picker → next weekday's menu (ephemeral)
 │   ├── publishers/
-│   │   └── menuPublisher.js       # Cron job: 9:00 AM JST Mon–Fri, groups by campus, delivers per-campus menus
+│   │   └── menuPublisher.js       # Cron job: 6:00 AM JST Mon–Fri, groups by campus, delivers per-campus menus
 │   ├── utils/
 │   │   ├── formatMenu.js          # Campus-aware formatting (Uzumasa hardcoded prices, Kameoka from DB)
 │   │   └── logger.js              # Winston logger: file and console transports

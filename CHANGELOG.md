@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
  
+## [Unreleased]
+
+### Changed
+- **Vacation mode is over.** The cafeteria is back on its normal schedule —
+  tickets from 10:30 AM, open **11:00 AM – 2:00 PM** — and the "reduced schedule
+  during the vacation period" notice has been dropped from both campuses'
+  footers. Cancelling one meant cancelling the other: the footer would otherwise
+  advertise normal hours under a reduced-hours warning.
+- The 6:00 AM JST posting time is unchanged; vacation mode had bundled it with
+  the reduced hours, but it is kept deliberately and is now the documented
+  schedule (README said 9:00 AM, which had been stale since 2026-08-04).
+
 ## [1.2.0] - 2026-08-12
 
 ### Fixed

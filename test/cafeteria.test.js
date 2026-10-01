@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const {
   POSTING_TIME,
   HOURS,
+  NOTICES,
   hoursLine,
   buildFooter,
   studentPrice,
@@ -18,10 +19,19 @@ test('the hours line is built from config, not hardcoded', () => {
   assert.ok(line.includes(HOURS.closes));
 });
 
-test('ticket time matches opening time during reduced hours', () => {
-  // The cafeteria notice states ticket sales and service both begin at 11:30;
-  // advertising an earlier ticket time sent students an hour early.
-  assert.strictEqual(HOURS.ticketsFrom, HOURS.opens);
+test('tickets go on sale before service opens on the normal schedule', () => {
+  // Tickets at 10:30, doors at 11:00 — the term-time hours. Vacation mode had
+  // both at 11:30 and closed at 1:30; this pins the schedule that replaced it.
+  assert.strictEqual(HOURS.ticketsFrom, '10:30 AM');
+  assert.strictEqual(HOURS.opens, '11:00 AM');
+  assert.strictEqual(HOURS.closes, '2:00 PM');
+});
+
+test('the vacation notice is gone now that vacation is over', () => {
+  // Left in place it would tell students the cafeteria is on reduced hours
+  // while the footer advertises the normal ones.
+  assert.deepStrictEqual(NOTICES, []);
+  assert.ok(!buildFooter(['Campus note.']).includes('vacation'));
 });
 
 test('buildFooter appends campus-specific notes after the shared ones', () => {
@@ -57,7 +67,8 @@ test('rendered menus pick up the configured hours', () => {
     },
   ]);
 
-  // Guards the regression where the footer advertised 10:30 while config said 11:30.
+  // Guards the regression where the footer advertised hours that no longer
+  // matched the config — 10:30 while config said 11:30.
   assert.ok(
     chunk.includes(`Tickets from **${HOURS.ticketsFrom}**`),
     'the footer must reflect config, not a stale literal'

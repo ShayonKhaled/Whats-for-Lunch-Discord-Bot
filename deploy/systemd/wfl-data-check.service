@@ -1,0 +1,16 @@
+[Unit]
+Description=Menu data quality check (What's for Lunch bot)
+Documentation=file:/root/Whats-for-Lunch-Discord-Bot/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/Whats-for-Lunch-Discord-Bot
+ExecStart=/usr/bin/npm run check:data
+# Exit 1 means "the check ran and the data has problems" — the DM is the alert.
+# Leaving it a failure would put a red unit in systemctl --failed every morning
+# and hide a genuine crash (exit 2).
+SuccessExitStatus=1
+TimeoutStartSec=300

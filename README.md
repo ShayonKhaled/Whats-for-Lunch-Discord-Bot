@@ -342,32 +342,22 @@ wfl-bot/
 
 ## Deployment with Systemd
 
-Create `/etc/systemd/system/campus-lunch-discord-bot.service`:
-
-```ini
-[Unit]
-Description=Campus Lunch Discord Bot
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=nobody
-WorkingDirectory=/path/to/wfl-bot
-ExecStart=/usr/bin/node src/bot.js
-Restart=on-failure
-RestartSec=10
-EnvironmentFile=/path/to/wfl-bot/.env
-
-[Install]
-WantedBy=multi-user.target
-```
+The units the production host runs are checked in under
+[`deploy/systemd/`](deploy/systemd/) — `wfl-bot.service` for the bot and
+`wfl-data-check.{service,timer}` for the pre-dawn data check. See
+[deploy/README.md](deploy/README.md) for what each does and how to install them.
 
 ```bash
+sudo cp deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable campus-lunch-discord-bot
-sudo systemctl start campus-lunch-discord-bot
-sudo journalctl -u campus-lunch-discord-bot -f
+sudo systemctl enable --now wfl-bot.service
+sudo systemctl enable --now wfl-data-check.timer
+sudo journalctl -u wfl-bot -f
 ```
+
+`wfl-bot.service` assumes the checkout is at
+`/root/Whats-for-Lunch-Discord-Bot` and runs as root so it can read `.env`;
+adjust `WorkingDirectory`, `ExecStart` and `EnvironmentFile` if yours differs.
 
 ---
 

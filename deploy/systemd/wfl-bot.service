@@ -1,0 +1,17 @@
+[Unit]
+Description=What's for Lunch — Discord Bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/Whats-for-Lunch-Discord-Bot
+ExecStart=/usr/bin/node src/bot.js
+Restart=on-failure
+RestartSec=10
+EnvironmentFile=/root/Whats-for-Lunch-Discord-Bot/.env
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

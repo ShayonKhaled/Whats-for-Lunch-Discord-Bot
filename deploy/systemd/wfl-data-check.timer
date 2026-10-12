@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the menu data quality check each weekday before the 6 AM post
+
+[Timer]
+# 05:30 JST, half an hour before the publisher posts, so a bad scrape is
+# reported before it goes out rather than after. The timezone is explicit
+# because the host itself runs in UTC. (systemd rejects weekday ranges that
+# wrap, so this is Mon..Fri rather than Sun..Thu.)
+OnCalendar=Mon..Fri *-*-* 05:30:00 Asia/Tokyo
+Persistent=true
+Unit=wfl-data-check.service
+
+[Install]
+WantedBy=timers.target

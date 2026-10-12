@@ -374,6 +374,35 @@ test('a failing repair does not stop the publish', async () => {
   assert.strictEqual(sent.length, 1, 'the menu matters more than the repair');
 });
 
+test('a manual run does not page anyone when everyone already has today', async () => {
+  // The dashboard's re-publish button is a *retry*: after a good day, every
+  // guild is skipped and the run looks exactly like the August outage from the
+  // inside. Alerting on that would page the admin every time the button worked.
+  process.env.UPTIME_KUMA_MENU_PUSH_URL = PUSH_URL;
+  process.env.BOT_ADMIN_ID = '999';
+  mockDb({ alreadySent: true });
+  const push = capturePush();
+  const { client, dms } = makeClient();
+
+  await publishMenu(client, { manual: true });
+
+  assert.strictEqual(push.urls.length, 0, 'no health signal from a manual run');
+  assert.strictEqual(dms.length, 0, 'and no admin DM');
+});
+
+test('the scheduled run keeps the signal a manual run suppresses', async () => {
+  process.env.UPTIME_KUMA_MENU_PUSH_URL = PUSH_URL;
+  process.env.BOT_ADMIN_ID = '999';
+  mockDb({ alreadySent: true });
+  const push = capturePush();
+  const { client, dms } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(push.last().status, 'down', 'the unattended run still reports');
+  assert.strictEqual(dms.length, 1, 'and still wakes someone up');
+});
+
 // ── Prices the scraper dropped ───────────────────────────────────────────────
 // Weeks of 2026-10-05 and 2026-10-12 arrived with every price NULL, so Kameoka
 // menus posted with no ¥ figures at all. The publisher hands the formatter the

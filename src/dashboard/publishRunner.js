@@ -81,8 +81,13 @@ function trigger(client, triggeredBy = 'dashboard') {
 
   // Detached on purpose — see the module comment. publishMenu already handles
   // and logs its own errors, so the catch here is for anything it rethrows.
+  //
+  // Manual: the operator is watching this run, and "0 sent" is the expected
+  // result of retrying a day everyone already received. Left unsupervised, the
+  // retry button would page the admin and take the Uptime Kuma monitor down
+  // every time it did its job.
   menuPublisher
-    .publishMenu(client)
+    .publishMenu(client, { manual: true })
     .catch((err) => {
       state.error = err.message;
       logger.error(`Manual publish failed: ${err.message}`);

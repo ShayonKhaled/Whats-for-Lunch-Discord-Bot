@@ -11,9 +11,22 @@ const { todayCampus } = require('../utils/campusDate');
 
 let scheduledJob = null;
 
-async function publishMenu(client) {
+/**
+ * Publish today's menus to every active subscriber.
+ *
+ * @param {import('discord.js').Client} client
+ * @param {{manual?: boolean}} [options] `manual` marks a run a human started
+ *   (publishNow, the dashboard button). Such a run suppresses the health push
+ *   and the admin DMs: "menu present, 0 sent" is the *expected* outcome of
+ *   re-running once everyone already has today's menu, and it is
+ *   indistinguishable from the August failure from in here. Alerting on it
+ *   would page someone every time the retry button did its job. The scheduled
+ *   run — the one nobody is watching — keeps the signal.
+ */
+async function publishMenu(client, options = {}) {
+  const manual = options.manual === true;
   const now = new Date();
-  logger.info(`🔄 Menu publisher job started at ${now.toISOString()}`);
+  logger.info(`🔄 Menu publisher job started at ${now.toISOString()}${manual ? ' (manual run)' : ''}`);
 
   try {
     const today = todayCampus(); // YYYY-MM-DD in JST, not UTC
@@ -187,7 +200,9 @@ async function publishMenu(client) {
     // unambiguously broken. Zero deliveries with no menu published is the
     // cafeteria being closed, which is expected and must not page anyone.
     const menuPushUrl = process.env.UPTIME_KUMA_MENU_PUSH_URL;
-    if (menuPushUrl) {
+    if (menuPushUrl && manual) {
+      logger.info('ℹ️ Manual run — Uptime Kuma health push suppressed');
+    } else if (menuPushUrl) {
       const deliveryFailed = anyMenuAvailable && successCount === 0;
       const status = deliveryFailed ? 'down' : 'up';
 
@@ -213,7 +228,7 @@ async function publishMenu(client) {
     // therefore never tripped the failCount check below.
     const totalFailure = anyMenuAvailable && successCount === 0;
 
-    if ((failCount > 0 || totalFailure) && process.env.BOT_ADMIN_ID) {
+    if ((failCount > 0 || totalFailure) && process.env.BOT_ADMIN_ID && !manual) {
       const content = totalFailure
         ? `🚨 **Menu Publisher — nothing delivered**\nA menu was published for ${today} but **no guild received it** (${skipCount} skipped, ${failCount} failed).\nCheck the delivery log and the publisher's date handling.`
         : `⚠️ **Menu Publisher Alert**\n${failCount} guild(s) failed to receive today's menu.\nCheck bot permissions and channel availability.`;
@@ -231,7 +246,7 @@ async function publishMenu(client) {
     // A repair is worth a DM even on an otherwise clean run: the menus went out,
     // but only because a mislabelled batch was patched on the way past. This
     // reports the scraper as still broken, not the bot as fine.
-    if (repairNote && process.env.BOT_ADMIN_ID) {
+    if (repairNote && process.env.BOT_ADMIN_ID && !manual) {
       try {
         const admin = await client.users.fetch(process.env.BOT_ADMIN_ID);
         if (admin) {

@@ -28,7 +28,7 @@ async function run() {
   client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}, running publisher now...`);
     try {
-      await menuPublisher.publishMenu(client);
+      await menuPublisher.publishMenu(client, { manual: true });
       console.log('Publish run complete');
     } catch (err) {
       console.error('Publish failed:', err.message);

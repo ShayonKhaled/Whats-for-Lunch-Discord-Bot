@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   NULLs, because it is the scraper that needs fixing.
 
 ### Fixed
+- **Uptime Kuma pushes never arrived.** Its UI hands you a push URL with the
+  query string already attached (`...?status=up&msg=OK&ping=`); callers appended
+  another `?status=…`, producing a URL with two question marks that Node rejects
+  as malformed. The failure was logged at debug level and nothing else, so every
+  monitor sat green while reporting nothing — the August outage, the vacation gap
+  and the mislabelled Kameoka weeks all went unpaged, and the `.env` was never
+  the problem. `resolvePushUrl()` now *replaces* the query instead of appending
+  to it, and a failed push warns (rate-limited per label) rather than hiding.
 - **Kameoka's menu was silently skipped for the weeks of 2026-10-05 and
   2026-10-12.** The n8n parser resolves campus as `... || 'Unknown'`; when the
   Kameoka branch loses that value the workflow still succeeds and the whole week

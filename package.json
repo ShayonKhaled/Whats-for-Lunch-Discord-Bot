@@ -9,6 +9,7 @@
     "register": "node scripts/registerGlobalCommands.js",
     "publishNow": "node scripts/publishNow.js",
     "check:data": "node scripts/checkMenuData.js",
+    "fix:campus": "node scripts/fixCampusLabels.js",
     "test": "node --test test/*.test.js",
     "test:watch": "node --test --watch test/*.test.js",
     "lint": "eslint .",

@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const logger = require('./utils/logger');
 const { todayCampus } = require('./utils/campusDate');
+const { classifyUnknownRows, KNOWN_CAMPUSES } = require('./utils/campusNormalize');
 
 let pool;
 
@@ -159,6 +160,122 @@ async function getNextMenu(campus) {
     return { menuDate, items: itemsRes.rows };
   } catch (err) {
     logger.error(`Error fetching next menu: ${err.message}`);
+    throw err;
+  }
+}
+
+/**
+ * Repair menu rows the scraper filed under a campus the bot cannot match.
+ *
+ * Groups the offending rows by date, asks the classifier which campus each
+ * group is, and — only for the groups it can prove — relabels them. A row that
+ * would collide with an existing row of the target campus (the same date, dish
+ * and subcategory) is a duplicate from a re-run, so it is deleted instead; the
+ * unique index would reject the update otherwise.
+ *
+ * Everything is applied in one transaction, so a failure part-way leaves the
+ * table exactly as it was. Pass `{ apply: false }` to report without writing.
+ *
+ * @param {string} fromDate YYYY-MM-DD, inclusive
+ * @param {string} toDate   YYYY-MM-DD, inclusive
+ * @returns {Promise<{examined: number, relabelled: number, deleted: number, skipped: number, groups: object[]}>}
+ */
+async function repairUnknownCampus(fromDate, toDate, options = {}) {
+  const apply = options.apply !== false;
+  const report = { fromDate, toDate, examined: 0, relabelled: 0, deleted: 0, skipped: 0, groups: [] };
+
+  try {
+    const rows = (
+      await pool.query(
+        `SELECT id, menu_date, campus, category, subcategory, dish_name
+           FROM menu_items
+          WHERE campus <> ALL($1::text[])
+            AND menu_date::date BETWEEN $2::date AND $3::date
+          ORDER BY menu_date, id`,
+        [KNOWN_CAMPUSES, fromDate, toDate]
+      )
+    ).rows;
+
+    report.examined = rows.length;
+    if (rows.length === 0) return report;
+
+    // Existing rows for the same dates, so duplicates can be spotted before the
+    // unique index does it for us.
+    const dates = [...new Set(rows.map((r) => r.menu_date))];
+    const existing = (
+      await pool.query(
+        `SELECT campus, menu_date, dish_name, subcategory
+           FROM menu_items
+          WHERE campus = ANY($1::text[]) AND menu_date = ANY($2::text[])`,
+        [KNOWN_CAMPUSES, dates]
+      )
+    ).rows;
+    const taken = new Set(existing.map((r) => `${r.campus}|${r.menu_date}|${r.dish_name}|${r.subcategory ?? ''}`));
+
+    const byDate = new Map();
+    for (const row of rows) {
+      if (!byDate.has(row.menu_date)) byDate.set(row.menu_date, []);
+      byDate.get(row.menu_date).push(row);
+    }
+
+    /** @type {Map<string, number[]>} campus → row ids to relabel */
+    const relabelByCampus = new Map();
+    const toDelete = [];
+
+    for (const [date, group] of byDate) {
+      const verdict = classifyUnknownRows(group);
+      const entry = { date, rows: group.length, campus: verdict.campus, reason: verdict.reason, relabelled: 0, deleted: 0 };
+
+      if (verdict.campus) {
+        const ids = relabelByCampus.get(verdict.campus) || [];
+        for (const row of group) {
+          const key = `${verdict.campus}|${date}|${row.dish_name}|${row.subcategory ?? ''}`;
+          if (taken.has(key)) {
+            toDelete.push(row.id);
+            entry.deleted++;
+          } else {
+            taken.add(key);
+            ids.push(row.id);
+            entry.relabelled++;
+          }
+        }
+        relabelByCampus.set(verdict.campus, ids);
+        report.relabelled += entry.relabelled;
+        report.deleted += entry.deleted;
+      } else {
+        report.skipped += group.length;
+      }
+
+      report.groups.push(entry);
+    }
+
+    const nothingToDo = report.relabelled === 0 && report.deleted === 0;
+    if (!apply || nothingToDo) return report;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const [campus, ids] of relabelByCampus) {
+        if (ids.length === 0) continue;
+        await client.query('UPDATE menu_items SET campus = $1 WHERE id = ANY($2::int[])', [campus, ids]);
+      }
+      if (toDelete.length > 0) {
+        await client.query('DELETE FROM menu_items WHERE id = ANY($1::int[])', [toDelete]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    logger.warn(
+      `🧹 Repaired campus labels ${fromDate}..${toDate}: ${report.relabelled} relabelled, ${report.deleted} duplicate(s) removed, ${report.skipped} left alone`
+    );
+    return report;
+  } catch (err) {
+    logger.error(`Error repairing unknown-campus rows: ${err.message}`);
     throw err;
   }
 }
@@ -446,6 +563,7 @@ module.exports = {
   getTodayMenu,
   getMenuByDate,
   getNextMenu,
+  repairUnknownCampus,
   hasSuccessfulDelivery,
   logDelivery,
   getSubscriptionByGuildId,

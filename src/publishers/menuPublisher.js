@@ -18,6 +18,31 @@ async function publishMenu(client) {
   try {
     const today = todayCampus(); // YYYY-MM-DD in JST, not UTC
 
+    // Repair before reading anything. A mislabelled Kameoka menu is invisible to
+    // every query below — that is how two October Mondays went out to Uzumasa
+    // alone while the workflow that caused it kept reporting success. The repair
+    // refuses to guess (see utils/campusNormalize): a row it cannot prove is
+    // reported and left untouched, never reassigned on a hunch.
+    let repairNote = null;
+    try {
+      const repair = await db.repairUnknownCampus(today, today);
+      if (repair.relabelled > 0 || repair.deleted > 0) {
+        repairNote =
+          '🧹 **Mislabelled campus rows repaired before publishing**\n' +
+          `${repair.relabelled} row(s) for ${today} were filed under an unrecognised campus and have been relabelled to Kameoka` +
+          (repair.deleted ? `; ${repair.deleted} duplicate row(s) removed` : '') +
+          '.\nThe n8n parser is still writing that bad campus value — its Kameoka branch needs fixing.';
+        logger.warn(repairNote.replace(/\n/g, ' '));
+      } else if (repair.skipped > 0) {
+        logger.warn(
+          `⚠️ ${repair.skipped} row(s) for ${today} sit under an unrecognised campus and could not be proven Kameoka — left alone`
+        );
+      }
+    } catch (err) {
+      // Never let the repair stop a publish: the menu may still go out fine.
+      logger.error(`Campus label repair failed, continuing with the publish: ${err.message}`);
+    }
+
     // Get all active subscriptions (now per-campus)
     const subscriptions = await db.getActiveSubscriptions();
     logger.info(`📤 Found ${subscriptions.length} active subscription(s)`);
@@ -197,6 +222,20 @@ async function publishMenu(client) {
         }
       } catch (error) {
         logger.warn(`Could not send admin alert: ${error.message}`);
+      }
+    }
+
+    // A repair is worth a DM even on an otherwise clean run: the menus went out,
+    // but only because a mislabelled batch was patched on the way past. This
+    // reports the scraper as still broken, not the bot as fine.
+    if (repairNote && process.env.BOT_ADMIN_ID) {
+      try {
+        const admin = await client.users.fetch(process.env.BOT_ADMIN_ID);
+        if (admin) {
+          await admin.send({ content: repairNote });
+        }
+      } catch (error) {
+        logger.warn(`Could not send repair alert: ${error.message}`);
       }
     }
   } catch (error) {

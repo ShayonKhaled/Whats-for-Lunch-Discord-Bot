@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
 
+### Added
+- **Campus-label self-repair.** Before each publish the bot relabels menu rows
+  the scraper filed under an unrecognised campus — but only when the categories
+  prove the campus (`src/utils/campusNormalize.js`): a Kameoka-only category
+  present (`Set`, `Live Kitchen`, `Side Dish`) and none that is Uzumasa-only
+  (`Set Meals`, `A La Carte`, `Noodles`, `Sides`, `Halal`). Categories both
+  campuses use (`Curry`, `Ramen`) prove nothing, so such a batch is reported and
+  left alone rather than guessed at. A row that would collide with an existing
+  row of the target campus is a duplicate from a re-run and is deleted instead.
+  Every repair is logged and DMed to `BOT_ADMIN_ID`, because a repair means the
+  n8n parser is *still* writing the bad value.
+- `npm run fix:campus` — the same repair by hand, dry run by default
+  (`--apply` to write, `--all` for every date on record). Exits non-zero when it
+  finds rows it cannot prove, so a timer can alert on it.
+
+### Fixed
+- **Kameoka's menu was silently skipped for the weeks of 2026-10-05 and
+  2026-10-12.** The n8n parser resolves campus as `... || 'Unknown'`; when the
+  Kameoka branch loses that value the workflow still succeeds and the whole week
+  lands under a campus the bot — which matches campus exactly — can never see.
+  Uzumasa went out alone and nothing recorded a failure. Both weeks recovered
+  (55 rows each), and the 6 AM post now repairs provable labels before reading
+  the menu. The parser fallback still needs fixing upstream: it should fail
+  loudly rather than invent a campus.
+
 ### Changed
 - **Vacation mode is over.** The cafeteria is back on its normal schedule —
   tickets from 10:30 AM, open **11:00 AM – 2:00 PM** — and the "reduced schedule

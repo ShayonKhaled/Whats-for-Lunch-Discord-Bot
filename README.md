@@ -300,6 +300,8 @@ wfl-bot/
 ├── migrations/
 │   └── add_role_id.sql            # Run once when upgrading from older versions
 ├── scripts/
+│   ├── checkMenuData.js           # Validate scraped data; pushes to its own Uptime Kuma monitor
+│   ├── fixCampusLabels.js         # Repair rows filed under an unrecognised campus (dry run by default)
 │   ├── publishNow.js              # Manually trigger a menu publish run
 │   ├── publishSampleToSubscriptions.js  # Send a test menu to all subscribers
 │   ├── registerGlobalCommands.js  # Register slash commands globally (~1hr propagation)
@@ -392,7 +394,26 @@ Ensure you're selecting the correct campus when running `/notify`. Each campus h
 **Commands not appearing in a server**
 Run `npm run register` and wait up to one hour. For instant results during testing, use `scripts/registerGuildCommands.js --guild <GUILD_ID>`.
 
-**Menu not posting at 9 AM**
+**Kameoka stops posting while Uzumasa is fine**
+The scraper occasionally writes Kameoka rows with `campus = 'Unknown'` (its n8n
+parser falls back to that string when the Kameoka branch loses the value). The
+bot matches campus exactly and will never see those rows. The publisher repairs
+provable labels before each run and DMs the admin when it has to, so a silent
+miss should not recur — but the parser still needs fixing in the workflow.
+To check or repair by hand:
+
+```bash
+npm run fix:campus                      # today, dry run — prints what it would change
+npm run fix:campus -- --apply           # today, write the changes
+npm run fix:campus -- --all --apply     # every date on record
+npm run check:data                      # broader data-quality report
+```
+
+It only relabels a date's rows when the categories prove the campus — a
+Kameoka-only category present and no Uzumasa-only one — and deletes a row only
+when the same dish already exists for the campus it is moving to.
+
+**Menu not posting at 6 AM**
 - Verify menu data exists: `SELECT campus, COUNT(*) FROM menu_items WHERE menu_date::date = CURRENT_DATE GROUP BY campus;`
 - Verify the guild is active: `SELECT * FROM guild_subscriptions WHERE is_active = TRUE;`
 - Check for a delivery log entry: `SELECT * FROM bot_delivery_log WHERE menu_date = CURRENT_DATE::text AND campus = 'Uzumasa';`

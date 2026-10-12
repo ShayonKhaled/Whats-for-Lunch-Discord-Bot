@@ -61,6 +61,7 @@ function menuItem(overrides = {}) {
 /** A Discord client stub that records what would have been sent. */
 function makeClient({ channelMissing = false, canSend = true } = {}) {
   const sent = [];
+  const dms = [];
   const me = {};
   const channel = {
     name: 'lunch',
@@ -72,19 +73,33 @@ function makeClient({ channelMissing = false, canSend = true } = {}) {
   };
   return {
     sent,
+    dms,
     client: {
       channels: { fetch: async () => (channelMissing ? null : channel) },
-      users: { fetch: async () => null },
+      users: {
+        fetch: async () => ({
+          send: async (payload) => {
+            dms.push(payload);
+          },
+        }),
+      },
     },
   };
 }
 
 /** Install the default happy-path database mocks. Returns recorded calls. */
-function mockDb({ alreadySent = false, items = [menuItem()], subs = [subscription()] } = {}) {
-  const calls = { deliveryChecks: [], logged: [] };
+function mockDb({ alreadySent = false, items = [menuItem()], subs = [subscription()], repair = null, repairError = null } = {}) {
+  const calls = { deliveryChecks: [], logged: [], repairs: [] };
 
   mock.method(db, 'getActiveSubscriptions', async () => subs);
   mock.method(db, 'getTodayMenu', async () => items);
+  // Recorded with a snapshot of how many menus had been read by this point, so a
+  // test can prove the repair runs before the reads rather than after them.
+  mock.method(db, 'repairUnknownCampus', async (from, to) => {
+    calls.repairs.push({ from, to, menusReadSoFar: db.getTodayMenu.mock.calls.length });
+    if (repairError) throw new Error(repairError);
+    return { examined: 0, groups: [], relabelled: 0, deleted: 0, skipped: 0, ...(repair || {}) };
+  });
   mock.method(db, 'getRatingsForDishes', async () => new Map());
   mock.method(db, 'hasSuccessfulDelivery', async (guildId, campus, menuDate) => {
     calls.deliveryChecks.push({ guildId, campus, menuDate });
@@ -301,4 +316,59 @@ test('a publisher error does not reject — it is caught and logged', async () =
   const { client } = makeClient();
 
   await assert.doesNotReject(() => publishMenu(client));
+});
+
+// ── Mislabelled campus rows ──────────────────────────────────────────────────
+// Twice in October 2026 the scraper filed Kameoka's week under campus 'Unknown'.
+// The bot matches campus exactly, so those runs sent Uzumasa only — silently,
+// with every other signal green. The publish now repairs the labels first and
+// tells the admin it had to, so the upstream bug stays visible.
+
+test('repairs mislabelled campus rows before reading any menu', async () => {
+  const calls = mockDb({ repair: { relabelled: 55, skipped: 0 } });
+  const { client } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(calls.repairs.length, 1, 'the repair runs once per publish');
+  assert.strictEqual(calls.repairs[0].from, JST_DATE);
+  assert.strictEqual(calls.repairs[0].to, JST_DATE);
+  assert.strictEqual(
+    calls.repairs[0].menusReadSoFar,
+    0,
+    'repairing after the menu read would leave the same run still missing Kameoka'
+  );
+});
+
+test('a repair is reported to the admin even when every menu went out', async () => {
+  process.env.BOT_ADMIN_ID = '999';
+  mockDb({ repair: { relabelled: 55, deleted: 2 } });
+  const { client, sent, dms } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(sent.length, 1, 'the menu still goes out');
+  assert.strictEqual(dms.length, 1, 'and the scraper problem is reported');
+  assert.match(dms[0].content, /55 row\(s\)/);
+  assert.match(dms[0].content, /n8n parser/);
+});
+
+test('rows whose campus cannot be proven are left alone, not guessed at', async () => {
+  const calls = mockDb({ repair: { relabelled: 0, skipped: 11 } });
+  const { client, sent, dms } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(sent.length, 1, 'an unprovable label must not block the publish');
+  assert.strictEqual(dms.length, 0, 'and raises no repair claim it cannot stand behind');
+  assert.ok(calls.repairs.length === 1);
+});
+
+test('a failing repair does not stop the publish', async () => {
+  mockDb({ repairError: 'permission denied for table menu_items' });
+  const { client, sent } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(sent.length, 1, 'the menu matters more than the repair');
 });

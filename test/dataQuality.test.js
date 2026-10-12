@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { checkMenuData } = require('../src/utils/dataQuality');
+const { checkMenuData, publishingDays } = require('../src/utils/dataQuality');
 
 const WEEK = ['2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21'];
 
@@ -122,4 +122,35 @@ test('the report states what was actually checked', () => {
   assert.strictEqual(result.checked.rows, 40);
   assert.deepStrictEqual(result.checked.weekdays, WEEK);
   assert.deepStrictEqual(result.checked.campuses.sort(), ['Kameoka', 'Uzumasa']);
+});
+
+// ── Which days count as published ────────────────────────────────────────────
+// The relative coverage check is only as good as its idea of "a day someone
+// published". A lone row is not a menu: the Halal workflow runs weeks ahead of
+// the weekly one, so treating one Halal row as a publishing day made Kameoka
+// look delinquent for four future dates every single morning.
+
+test('a lone Halal row does not make the other campus owe a menu', () => {
+  const rows = [
+    ...healthyRows(['2026-08-18']),
+    row('Uzumasa', '2026-09-03', { category: 'Halal', dish_name: 'Halal Curry', price: 400 }),
+  ];
+
+  assert.deepStrictEqual(publishingDays(rows), ['2026-08-18']);
+  assert.strictEqual(checkMenuData(rows, publishingDays(rows)).ok, true);
+});
+
+test('a full menu still makes the other campus owe one', () => {
+  const rows = healthyRows(['2026-08-18']).filter((r) => r.campus !== 'Kameoka');
+  const days = publishingDays(rows);
+
+  assert.deepStrictEqual(days, ['2026-08-18'], 'a real menu establishes the day');
+  assert.ok(
+    checkMenuData(rows, days).problems.some((p) => p.includes('Kameoka has no menu')),
+    'so the campus that is genuinely missing is still reported'
+  );
+});
+
+test('an unrecognised campus does not establish a publishing day', () => {
+  assert.deepStrictEqual(publishingDays([row('Unknown', '2026-09-03')]), []);
 });

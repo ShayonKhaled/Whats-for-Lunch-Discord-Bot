@@ -3,12 +3,12 @@
  * scripts/checkMenuData.js
  *
  * Validates what the n8n scrapers wrote into `menu_items` and exits non-zero
- * when something is wrong. Intended for cron:
- *
- *   0 12 * * *  cd /root/Whats-for-Lunch-Discord-Bot && npm run check:data
+ * when something is wrong. Intended for a timer on the bot host
+ * (wfl-data-check.timer, weekdays at 05:30 JST — before the 6 AM post).
  *
  * Set UPTIME_KUMA_DATA_PUSH_URL to have the result pushed to a Uptime Kuma
- * monitor, so a bad scrape pages you the same way a dead bot would.
+ * monitor. With BOT_ADMIN_ID set, a failure is DMed to the admin as well, so the
+ * check still pages you where no push monitor exists.
  *
  * The coverage check is relative: it only asserts a campus has a menu for days
  * some *other* campus has already published. A closed cafeteria therefore
@@ -20,8 +20,9 @@ require('dotenv').config();
 
 const db = require('../src/db');
 const logger = require('../src/utils/logger');
-const { checkMenuData } = require('../src/utils/dataQuality');
+const { checkMenuData, publishingDays } = require('../src/utils/dataQuality');
 const { todayCampus, isWeekday } = require('../src/utils/campusDate');
+const { sendAdminDm } = require('../src/utils/adminAlert');
 const { push: pingUptimeKuma } = require('../src/utils/uptimeKuma');
 
 const WINDOW_DAYS = parseInt(process.env.DATA_CHECK_WINDOW_DAYS, 10) || 21;
@@ -36,10 +37,9 @@ async function main() {
 
   const rows = await db.getMenuItemsBetween(today, end);
 
-  // Days any campus has published — see the header note on relative coverage.
-  const publishedWeekdays = [...new Set(rows.map((r) => r.menu_date))]
-    .filter(isWeekday)
-    .sort();
+  // Days any campus has published a *usable* menu — see the header note on
+  // relative coverage and publishingDays() for why a lone row does not count.
+  const publishedWeekdays = publishingDays(rows).filter(isWeekday);
 
   const result = checkMenuData(rows, publishedWeekdays);
 
@@ -61,6 +61,18 @@ async function main() {
     await pingUptimeKuma(
       `${pushUrl}?status=${result.ok ? 'up' : 'down'}&msg=${encodeURIComponent(msg)}`,
       'menu-data-quality'
+    );
+  }
+
+  // Paging the human matters more than the exit code: this runs unattended at
+  // 05:30, before the post that would otherwise go out wrong.
+  if (!result.ok) {
+    const shown = result.problems.slice(0, 10).map((p) => `- ${p}`).join('\n');
+    const more = result.problems.length > 10 ? `\n- …and ${result.problems.length - 10} more` : '';
+    await sendAdminDm(
+      `⚠️ **Menu data check failed** — ${today}\n${shown}${more}\n\n` +
+        'The scraped data is wrong or incomplete for the window starting today. ' +
+        'Run `npm run check:data` on the bot host for the full report.'
     );
   }
 

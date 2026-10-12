@@ -84,4 +84,33 @@ function checkMenuData(rows, weekdays) {
   };
 }
 
-module.exports = { checkMenuData, KNOWN_CAMPUSES, PRICED_CAMPUSES, MIN_ITEMS_PER_DAY };
+/**
+ * Dates some campus published a usable menu for.
+ *
+ * A lone row is not a published menu. The Halal workflow runs weeks ahead of the
+ * weekly one, so a single Halal row on a date three weeks out must not create an
+ * expectation that Kameoka owes a menu that day — that produced four false
+ * alarms a day. A campus publishing one item against another's full menu is
+ * still reported, because the day qualifies on the full menu and the short
+ * campus is then measured against MIN_ITEMS_PER_DAY.
+ *
+ * @param {object[]} rows
+ * @returns {string[]} sorted YYYY-MM-DD dates
+ */
+function publishingDays(rows) {
+  const counts = new Map();
+
+  for (const row of rows) {
+    if (!KNOWN_CAMPUSES.includes(row.campus)) continue;
+    if (!counts.has(row.menu_date)) counts.set(row.menu_date, new Map());
+    const perCampus = counts.get(row.menu_date);
+    perCampus.set(row.campus, (perCampus.get(row.campus) || 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .filter(([, perCampus]) => [...perCampus.values()].some((n) => n >= MIN_ITEMS_PER_DAY))
+    .map(([date]) => date)
+    .sort();
+}
+
+module.exports = { checkMenuData, publishingDays, KNOWN_CAMPUSES, PRICED_CAMPUSES, MIN_ITEMS_PER_DAY };

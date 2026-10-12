@@ -403,6 +403,14 @@ It only relabels a date's rows when the categories prove the campus — a
 Kameoka-only category present and no Uzumasa-only one — and deletes a row only
 when the same dish already exists for the campus it is moving to.
 
+**Prices missing from a menu**
+The scraper drops the `price` field from time to time — every week since
+2026-10-05 arrived with it NULL. Menus fall back to the last price actually
+scraped for that menu slot (most recent priced week, per category and
+subcategory), so a dropped field no longer blanks the prices. A slot that has
+never carried a price shows none. Either way, run `npm run check:data`: it
+reports the NULLs and the fix belongs in the pipeline's field mapping.
+
 **Menu not posting at 6 AM**
 - Verify menu data exists: `SELECT campus, COUNT(*) FROM menu_items WHERE menu_date::date = CURRENT_DATE GROUP BY campus;`
 - Verify the guild is active: `SELECT * FROM guild_subscriptions WHERE is_active = TRUE;`

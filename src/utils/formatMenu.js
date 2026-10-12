@@ -161,12 +161,29 @@ function displaySubcategoryName(entry, config) {
 
 const logger = require('./logger');
 
-function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
+function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa', fallbackPrices = null) {
   if (!items || items.length === 0) {
     return ['⚠️ No menu found for today.'];
   }
 
   const config = CAMPUS_CONFIG[campus] || CAMPUS_CONFIG.Uzumasa;
+
+  // Prices the scraper omitted are carried forward from the last list that had
+  // them (db.getLastKnownPrices). Resolved at render time rather than written
+  // into the database, so `menu_items` keeps holding only what was scraped —
+  // and the data check still reports the NULLs that made this necessary.
+  const carriedSlots = new Set();
+  const priceOf = (slot) => {
+    const scraped = config.priceLookup(slot);
+    if (typeof scraped === 'number') return scraped;
+
+    const slotKey = `${slot.category}|||${slot.subcategory}`;
+    const carried = fallbackPrices instanceof Map ? fallbackPrices.get(slotKey) : undefined;
+    if (carried === undefined || carried === null) return null;
+
+    carriedSlots.add(slotKey);
+    return studentPrice(campus, slot.category, carried);
+  };
 
   const firstItem = items[0];
   const menuDate = firstItem.menu_date;
@@ -231,7 +248,7 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
     // Section-level price (when all subcategories share the same price)
     const sectionPrices = new Set(
       section.items
-        .map((item) => config.priceLookup({ category: item.entry.categoryName, subcategory: item.entry.subcategoryName, price: item.dishes[0].price }))
+        .map((item) => priceOf({ category: item.entry.categoryName, subcategory: item.entry.subcategoryName, price: item.dishes[0].price }))
         .filter((price) => typeof price === 'number')
     );
     const sharedSectionPrice = sectionPrices.size === 1 ? [...sectionPrices][0] : null;
@@ -255,7 +272,7 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
       const subPriceStr = sharedSectionPrice
         ? ''
         : (() => {
-            const price = config.priceLookup({ category: item.entry.categoryName, subcategory: item.entry.subcategoryName, price: item.dishes[0].price });
+            const price = priceOf({ category: item.entry.categoryName, subcategory: item.entry.subcategoryName, price: item.dishes[0].price });
             const isSetMeal = config.setMealSubcategories.has(item.entry.subcategoryName);
             return price ? `  ·  ¥${price}${config.showSetMealNote && isSetMeal ? ' (+ 1 side/salad)' : ''}` : '';
           })();
@@ -289,6 +306,12 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa') {
         message += '\n';
       }
     }
+  }
+
+  if (carriedSlots.size > 0) {
+    logger.warn(
+      `[formatMenu] ${campus} ${menuDate}: ${carriedSlots.size} menu slot(s) had no scraped price — used the last published one (${[...carriedSlots].join(', ')}). The scraper is dropping the price field.`
+    );
   }
 
   message += '\n━━━━━━━━━━━━━━━━━━━━━━\n';

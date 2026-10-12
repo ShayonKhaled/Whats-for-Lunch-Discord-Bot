@@ -165,6 +165,50 @@ async function getNextMenu(campus) {
 }
 
 /**
+ * The most recent price the scraper recorded for each menu slot of a campus.
+ *
+ * The Kameoka parser drops the price field whenever the workflow's field
+ * mapping loses it, which leaves a whole week with `price = NULL` and menus
+ * posting without a single ¥ figure. Rather than invent prices or stand up a
+ * hardcoded table that silently rots, the formatter carries the last *scraped*
+ * price forward per (category, subcategory) — real observed values, with the
+ * admin already alerted to the NULLs by the data check.
+ *
+ * @param {string} campus
+ * @param {string} [beforeDate] YYYY-MM-DD, inclusive — never look into the future
+ * @returns {Promise<Map<string, number>>} `category|||subcategory` → price
+ */
+async function getLastKnownPrices(campus, beforeDate = todayCampus()) {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT ON (category, subcategory) category, subcategory, price, menu_date
+         FROM menu_items
+        WHERE campus = $1
+          AND price IS NOT NULL
+          AND menu_date::date <= $2::date
+        ORDER BY category, subcategory, menu_date::date DESC`,
+      [campus, beforeDate]
+    );
+
+    const prices = new Map();
+    let oldest = null;
+    for (const row of result.rows) {
+      prices.set(`${row.category}|||${row.subcategory}`, row.price);
+      if (!oldest || row.menu_date < oldest) oldest = row.menu_date;
+    }
+
+    if (prices.size > 0) {
+      logger.debug(`Loaded ${prices.size} last-known price(s) for ${campus} (oldest from ${oldest})`);
+    }
+    return prices;
+  } catch (err) {
+    // Prices are a nicety: a lookup failure must not cost anyone their menu.
+    logger.error(`Error fetching last known prices: ${err.message}`);
+    return new Map();
+  }
+}
+
+/**
  * Repair menu rows the scraper filed under a campus the bot cannot match.
  *
  * Groups the offending rows by date, asks the classifier which campus each
@@ -563,6 +607,7 @@ module.exports = {
   getTodayMenu,
   getMenuByDate,
   getNextMenu,
+  getLastKnownPrices,
   repairUnknownCampus,
   hasSuccessfulDelivery,
   logDelivery,

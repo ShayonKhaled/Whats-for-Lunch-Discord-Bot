@@ -30,6 +30,63 @@ test('returns a placeholder when there are no items', () => {
   assert.deepStrictEqual(formatMenuMessage(null), ['⚠️ No menu found for today.']);
 });
 
+// ── Prices the scraper dropped ───────────────────────────────────────────────
+// The Kameoka parser lost the price field from 2026-10-05, so whole weeks posted
+// with no ¥ figures. The formatter stands in the last price actually scraped for
+// that menu slot — never an invented one.
+
+test('a price missing from the scrape falls back to the last published one', () => {
+  const [first] = formatMenuMessage(
+    [dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: null })],
+    new Map(),
+    'Kameoka',
+    new Map([['Curry|||A', 350]])
+  );
+
+  assert.match(first, /¥350/, 'a priceless week must still show prices');
+});
+
+test('a scraped price always wins over the fallback', () => {
+  const [first] = formatMenuMessage(
+    [dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: 400 })],
+    new Map(),
+    'Kameoka',
+    new Map([['Curry|||A', 350]])
+  );
+
+  assert.match(first, /¥400/);
+  assert.doesNotMatch(first, /¥350/, 'the fallback must not override fresh data');
+});
+
+test('nothing is invented for a slot that was never priced', () => {
+  const [first] = formatMenuMessage(
+    [
+      dish({
+        campus: 'Kameoka',
+        category: 'Live Kitchen',
+        subcategory: 'Live Kitchen',
+        dish_name: 'Chicken and Egg Bowl',
+        price: null,
+      }),
+    ],
+    new Map(),
+    'Kameoka',
+    new Map([['Curry|||A', 350]])
+  );
+
+  assert.doesNotMatch(first, /¥/, 'another slot\u2019s price is not this slot\u2019s price');
+});
+
+test('callers that pass no fallback still render', () => {
+  const [first] = formatMenuMessage(
+    [dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', price: null })],
+    new Map(),
+    'Kameoka'
+  );
+
+  assert.match(first, /^# Kameoka Campus/);
+});
+
 test('header carries the campus, day and date', () => {
   const [first] = formatMenuMessage([dish()]);
   assert.match(first, /^# Uzumasa Campus — Tuesday, 2026-08-18/);

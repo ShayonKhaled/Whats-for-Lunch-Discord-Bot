@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `npm run fix:campus` — the same repair by hand, dry run by default
   (`--apply` to write, `--all` for every date on record). Exits non-zero when it
   finds rows it cannot prove, so a timer can alert on it.
+- **Prices now survive a dropped scrape field.** Every campus has been arriving
+  with `price = NULL` since 2026-10-05 (the week of 2026-09-28 was fully priced),
+  so Kameoka — which has no hardcoded fallback table — posted menus with no ¥
+  figures at all. The formatter falls back, per menu slot, to the most recent
+  price that *was* scraped (`db.getLastKnownPrices`, carried through the campus
+  discount tiers). Nothing is invented: a slot that was never priced stays
+  priceless, fresh scraped data always wins, a lookup failure cannot cost anyone
+  their menu, and every substitution is logged. `check:data` still reports the
+  NULLs, because it is the scraper that needs fixing.
 
 ### Fixed
 - **Kameoka's menu was silently skipped for the weeks of 2026-10-05 and

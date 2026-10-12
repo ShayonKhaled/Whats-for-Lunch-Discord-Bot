@@ -88,7 +88,7 @@ function makeClient({ channelMissing = false, canSend = true } = {}) {
 }
 
 /** Install the default happy-path database mocks. Returns recorded calls. */
-function mockDb({ alreadySent = false, items = [menuItem()], subs = [subscription()], repair = null, repairError = null } = {}) {
+function mockDb({ alreadySent = false, items = [menuItem()], subs = [subscription()], repair = null, repairError = null, lastKnownPrices = new Map() } = {}) {
   const calls = { deliveryChecks: [], logged: [], repairs: [] };
 
   mock.method(db, 'getActiveSubscriptions', async () => subs);
@@ -101,6 +101,7 @@ function mockDb({ alreadySent = false, items = [menuItem()], subs = [subscriptio
     return { examined: 0, groups: [], relabelled: 0, deleted: 0, skipped: 0, ...(repair || {}) };
   });
   mock.method(db, 'getRatingsForDishes', async () => new Map());
+  mock.method(db, 'getLastKnownPrices', async () => lastKnownPrices);
   mock.method(db, 'hasSuccessfulDelivery', async (guildId, campus, menuDate) => {
     calls.deliveryChecks.push({ guildId, campus, menuDate });
     return alreadySent;
@@ -371,4 +372,22 @@ test('a failing repair does not stop the publish', async () => {
   await publishMenu(client);
 
   assert.strictEqual(sent.length, 1, 'the menu matters more than the repair');
+});
+
+// ── Prices the scraper dropped ───────────────────────────────────────────────
+// Weeks of 2026-10-05 and 2026-10-12 arrived with every price NULL, so Kameoka
+// menus posted with no ¥ figures at all. The publisher hands the formatter the
+// last prices that were actually scraped.
+
+test('the menu carries a price even when the scrape dropped it', async () => {
+  mockDb({
+    subs: [subscription({ campus: 'Kameoka' })],
+    items: [menuItem({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: null })],
+    lastKnownPrices: new Map([['Curry|||A', 350]]),
+  });
+  const { client, sent } = makeClient();
+
+  await publishMenu(client);
+
+  assert.match(sent[0].content, /¥350/, 'a priceless week must still show prices');
 });

@@ -103,8 +103,11 @@ async function publishMenu(client) {
         logger.info(`⭐ Loaded ratings for ${ratingsMap.size} dish(es) from ${campus} Campus`);
       }
 
-      // Format menu with campus-specific config
-      const messageChunks = formatMenuMessage(menuItems, ratingsMap, campus);
+      // Format menu with campus-specific config. Recent weeks have arrived with
+      // every price NULL, so the last published prices stand in where the
+      // scraper dropped them — see db.getLastKnownPrices.
+      const fallbackPrices = await db.getLastKnownPrices(campus);
+      const messageChunks = formatMenuMessage(menuItems, ratingsMap, campus, fallbackPrices);
       logger.info(`📝 Formatted ${campus} Campus menu into ${messageChunks.length} chunk(s)`);
 
       // Campus-specific rate button

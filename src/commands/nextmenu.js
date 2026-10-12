@@ -58,8 +58,10 @@ module.exports = {
       // Fetch aggregate ratings for all dishes in the next menu
       const dishNames = [...new Set(items.map((d) => d.dish_name))];
       const ratingsMap = await db.getRatingsForDishes(dishNames, campus);
+      // Prices the scraper dropped are carried forward from the last list that had them.
+      const fallbackPrices = await db.getLastKnownPrices(campus);
 
-      const chunks = formatMenuMessage(items, ratingsMap, campus);
+      const chunks = formatMenuMessage(items, ratingsMap, campus, fallbackPrices);
 
       if (!chunks || chunks.length === 0) {
         return interaction.editReply({

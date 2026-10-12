@@ -8,7 +8,7 @@ const logger = require('./utils/logger');
 const { handleRatingInteraction } = require('./interactions/rateMenu');
 const { handleCampusSelection } = require('./interactions/campusSelector');
 const healthServer = require('./server');
-const { push: pingUptimeKuma } = require('./utils/uptimeKuma');
+const { push: pingUptimeKuma, resolvePushUrl } = require('./utils/uptimeKuma');
 
 const client = new Client({
   intents: [
@@ -135,13 +135,19 @@ async function start() {
     // Start health endpoint for Uptime Kuma monitoring
     healthServer.start(client);
 
-    // Heartbeat ping every 5 minutes so Uptime Kuma knows the bot is alive
+    // Heartbeat ping every 5 minutes so Uptime Kuma knows the bot is alive.
+    // resolvePushUrl because the .env value is the URL Uptime Kuma's UI shows,
+    // query string and all; appending another one makes it malformed.
+    const heartbeat = () =>
+      pingUptimeKuma(
+        resolvePushUrl(process.env.UPTIME_KUMA_HEARTBEAT_URL, { status: 'up', msg: 'heartbeat' }),
+        'heartbeat'
+      );
+
     const HEARTBEAT_MS = 5 * 60 * 1000;
-    setInterval(() => {
-      pingUptimeKuma(process.env.UPTIME_KUMA_HEARTBEAT_URL, 'heartbeat');
-    }, HEARTBEAT_MS);
+    setInterval(heartbeat, HEARTBEAT_MS);
     // Fire one immediately so Uptime Kuma registers it right away
-    pingUptimeKuma(process.env.UPTIME_KUMA_HEARTBEAT_URL, 'heartbeat');
+    heartbeat();
 
   } catch (error) {
     logger.error(`❌ Failed to start bot: ${error.message}`);

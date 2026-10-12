@@ -23,7 +23,7 @@ const logger = require('../src/utils/logger');
 const { checkMenuData, publishingDays } = require('../src/utils/dataQuality');
 const { todayCampus, isWeekday } = require('../src/utils/campusDate');
 const { sendAdminDm } = require('../src/utils/adminAlert');
-const { push: pingUptimeKuma } = require('../src/utils/uptimeKuma');
+const { push: pingUptimeKuma, resolvePushUrl } = require('../src/utils/uptimeKuma');
 
 const WINDOW_DAYS = parseInt(process.env.DATA_CHECK_WINDOW_DAYS, 10) || 21;
 
@@ -58,10 +58,7 @@ async function main() {
   const pushUrl = process.env.UPTIME_KUMA_DATA_PUSH_URL;
   if (pushUrl) {
     const msg = result.ok ? 'menu data ok' : result.problems.join('; ').slice(0, 300);
-    await pingUptimeKuma(
-      `${pushUrl}?status=${result.ok ? 'up' : 'down'}&msg=${encodeURIComponent(msg)}`,
-      'menu-data-quality'
-    );
+    await pingUptimeKuma(resolvePushUrl(pushUrl, { status: result.ok ? 'up' : 'down', msg }), 'menu-data-quality');
   }
 
   // Paging the human matters more than the exit code: this runs unattended at

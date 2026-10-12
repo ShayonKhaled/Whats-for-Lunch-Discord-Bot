@@ -219,8 +219,7 @@ async function publishMenu(client, options = {}) {
         logger.error(`🚨 ${msg} — reporting DOWN to Uptime Kuma`);
       }
 
-      const url = `${menuPushUrl}?status=${status}&msg=${encodeURIComponent(msg)}`;
-      uptimeKuma.push(url, 'menu-delivery');
+      uptimeKuma.push(uptimeKuma.resolvePushUrl(menuPushUrl, { status, msg }), 'menu-delivery');
     }
 
     // A total delivery failure is more serious than some guilds failing, so it

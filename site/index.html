@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What's for Lunch — cafeteria menus in Discord</title>
+<meta name="description" content="A self-hosted Discord bot that posts the Uzumasa and Kameoka campus cafeteria menus every weekday at 6:00 AM JST, with prices, allergens, ratings and a closed-day notice.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Ctext%20y%3D%27.9em%27%20font-size%3D%2790%27%3E%F0%9F%8D%B1%3C%2Ftext%3E%3C%2Fsvg%3E">
+<style>
+  :root {
+    --bg: #fbf8f3;
+    --surface: #ffffff;
+    --ink: #1c1917;
+    --muted: #57534e;
+    --line: #e7e0d6;
+    --accent: #b45309;
+    --accent-soft: #fef3c7;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16130f;
+      --surface: #201c17;
+      --ink: #f5f1ea;
+      --muted: #a8a29e;
+      --line: #322b23;
+      --accent: #fbbf24;
+      --accent-soft: #3a2c12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 22px; }
+  a { color: var(--accent); }
+  h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 .5em; }
+  h2 { font-size: 1.5rem; margin-top: 0; }
+  p { margin: 0 0 1em; }
+  header { padding: 22px 0; border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { font-weight: 700; letter-spacing: -0.02em; }
+  nav a { margin-left: 18px; color: var(--muted); text-decoration: none; font-size: .94rem; }
+  nav a:hover { color: var(--accent); }
+  .hero { padding: 64px 0 44px; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3rem); }
+  .lede { font-size: 1.12rem; color: var(--muted); max-width: 44ch; }
+  .pill {
+    display: inline-block; font-size: .8rem; font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--accent); background: var(--accent-soft);
+    padding: 5px 11px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+  .button {
+    display: inline-block; padding: 11px 20px; border-radius: 10px; text-decoration: none;
+    font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .button.primary { color: #16130f; } }
+  section { padding: 40px 0; border-top: 1px solid var(--line); }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+  .card h3 { font-size: 1rem; margin-bottom: .35em; }
+  .card p { margin: 0; color: var(--muted); font-size: .94rem; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
+  code { background: var(--accent-soft); color: var(--accent); padding: 2px 6px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: .94rem; }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .who { color: var(--muted); white-space: nowrap; }
+  .flow { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); counter-reset: step; }
+  .flow > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .flow > div::before {
+    counter-increment: step; content: counter(step);
+    display: block; font-weight: 700; color: var(--accent); margin-bottom: 6px; font-size: .85rem;
+  }
+  .flow p { margin: 0; color: var(--muted); font-size: .93rem; }
+  footer { padding: 34px 0 54px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="brand">🍱 What's for Lunch</span>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#commands">Commands</a>
+      <a href="#how">How it works</a>
+      <a href="https://github.com/ShayonKhaled/Whats-for-Lunch-Discord-Bot">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <span class="pill">Self-hosted · Discord</span>
+  <h1>Cafeteria menus,<br>in Discord, before you're hungry.</h1>
+  <p class="lede">
+    A Discord bot that posts the Uzumasa and Kameoka campus cafeteria menus to subscribed
+    servers every weekday at <strong>6:00 AM JST</strong> — with student prices, allergens,
+    dish ratings, and a notice when the cafeteria is shut.
+  </p>
+  <div class="actions">
+    <a class="button primary" href="https://github.com/ShayonKhaled/Whats-for-Lunch-Discord-Bot">View the source</a>
+    <a class="button" href="https://www.whatsforlunch.lol">whatsforlunch.lol</a>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Posts every weekday morning</h3>
+        <p>A scheduled run at 6:00 AM JST groups subscribers by campus and posts each campus's menu once, mentioning only the people who asked to be pinged.</p>
+      </div>
+      <div class="card">
+        <h3>Two campuses, separately</h3>
+        <p>A server can follow Uzumasa, Kameoka, or both — in the same channel or different ones. Each gets its own <code>notify-menu-&lt;campus&gt;</code> role, created automatically.</p>
+      </div>
+      <div class="card">
+        <h3>Prices that are actually right</h3>
+        <p>Student prices are derived from the scanned menu: the Uzumasa discount campaign tiers, and a flat ¥400 for halal. Kameoka's printed price is already the student price.</p>
+      </div>
+      <div class="card">
+        <h3>Dish ratings</h3>
+        <p>Rate today's dishes 1–5 stars from a button on the menu post. Future menus show the average beside the dish, so the good ones are easy to spot.</p>
+      </div>
+      <div class="card">
+        <h3>Closed days say so</h3>
+        <p>During a closure, <code>/nextmenu</code> explains that nothing is being served and shows the reopening date instead of silently jumping to the next menu.</p>
+      </div>
+      <div class="card">
+        <h3>Failures are visible</h3>
+        <p>A local dashboard separates "no menu today" from "a menu that reached nobody", and the admin gets a DM when a scrape is mislabelled or a price is missing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="commands">
+  <div class="wrap">
+    <h2>Commands</h2>
+    <p class="lede">Every command asks which campus first, then does the thing.</p>
+    <table>
+      <thead>
+        <tr><th>Command</th><th>Who</th><th>What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">/subscribe</td><td class="who">Admins</td><td>Posts that campus's menu in this channel each morning. Creates the ping role if it's missing.</td></tr>
+        <tr><td class="mono">/unsubscribe</td><td class="who">Admins</td><td>Stops the daily posts for that campus. Your settings are kept and can be switched back on any time.</td></tr>
+        <tr><td class="mono">/notify</td><td class="who">Everyone</td><td>Toggles the campus ping role on yourself — be told when the menu lands, without reading every post.</td></tr>
+        <tr><td class="mono">/status</td><td class="who">Everyone</td><td>Whether this server follows the chosen campus, and which channel receives it.</td></tr>
+        <tr><td class="mono">/preview</td><td class="who">Everyone</td><td>Today's menu, privately, on demand.</td></tr>
+        <tr><td class="mono">/nextmenu</td><td class="who">Everyone</td><td>The next day a menu exists for — or the reopening date, if the cafeteria is closed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <div class="flow">
+      <div>
+        <p>The weekly cafeteria PDF is picked up and parsed into structured dishes — day, category, price, calories, allergens — by an n8n workflow.</p>
+      </div>
+      <div>
+        <p>Rows land in a PostgreSQL table the bot reads. The bot never writes menus; it only reads them and records what it delivered.</p>
+      </div>
+      <div>
+        <p>A scheduled run posts each campus's menu to its subscribers, skips anyone already served that day, and reports the outcome — including to Uptime Kuma.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="host">
+  <div class="wrap">
+    <h2>Self-hosted, by design</h2>
+    <p class="lede">
+      There is no public instance to invite. The bot runs as a systemd service beside the
+      database, reads its whole configuration from a <code>.env</code>, and deploys with
+      <code>systemctl</code>. Setup, environment variables and the admin dashboard are
+      documented in the repository.
+    </p>
+    <div class="actions">
+      <a class="button" href="https://github.com/ShayonKhaled/Whats-for-Lunch-Discord-Bot#quick-start">Read the setup guide</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      MIT licensed · built by <a href="https://github.com/ShayonKhaled">ShayonKhaled</a> ·
+      menus from the <a href="https://github.com/ShayonKhaled/Campus-Lunch-Pipeline">Campus Lunch Pipeline</a>
+    </p>
+    <p>Not affiliated with the university. Always check the board inside the cafeteria for allergens.</p>
+  </div>
+</footer>
+
+</body>
+</html>

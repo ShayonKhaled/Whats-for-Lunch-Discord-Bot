@@ -1,0 +1,51 @@
+name: Deploy site
+
+# Publishes site/ to GitHub Pages, which is what serves
+# https://shayonkhaled.github.io/Whats-for-Lunch-Discord-Bot/
+#
+# Only the site is deployed — the dashboard under src/dashboard is a live view of
+# the database on the bot host and cannot run on static hosting.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never overlap deployments, but let a queued one finish rather than cancelling
+# it: a cancelled Pages deploy leaves the site on the older build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Creates the Pages site if it does not exist yet, so the first run
+          # needs no manual trip to Settings.
+          enablement: true
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

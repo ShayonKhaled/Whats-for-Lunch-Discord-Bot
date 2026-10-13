@@ -3,12 +3,6 @@
 ![Status](https://img.shields.io/badge/status-stable-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-**Project site:** <https://shayonkhaled.github.io/Whats-for-Lunch-Discord-Bot/> —
-what the bot does, the commands, and how it works, for anyone who isn't going to
-read this file. Source in [`site/`](site/), deployed by
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml) on any change under
-`site/`.
-
 A Discord bot that broadcasts the daily Uzumasa and Kameoka Campus cafeteria menus to subscribed servers every weekday at 6:00 AM JST. Reads from the same PostgreSQL database populated by the [campus-lunch-pipeline](https://github.com/ShayonKhaled/Campus-Lunch-Pipeline) and delivers it to any number of Discord servers independently.
 
 ---

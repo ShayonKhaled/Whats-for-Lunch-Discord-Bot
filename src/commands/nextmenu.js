@@ -45,6 +45,16 @@ module.exports = {
     await interaction.deferUpdate();
 
     try {
+      // The lookup matches campus exactly, so a week the scraper filed under
+      // 'Unknown' would be reported as "the cafeteria is closed" while the menu
+      // sat in the table. Repair the provable rows first — it is the same repair
+      // the 6 AM post runs, and it costs one indexed query when there is nothing
+      // to fix.
+      const { from, to } = db.repairWindow();
+      await db
+        .repairUnknownCampus(from, to)
+        .catch((err) => logger.warn(`Campus label repair skipped in /nextmenu: ${err.message}`));
+
       const { menuDate, items } = await db.getNextMenu(campus);
 
       if (!menuDate || !items || items.length === 0) {

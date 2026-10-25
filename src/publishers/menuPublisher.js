@@ -33,23 +33,37 @@ async function publishMenu(client, options = {}) {
 
     // Repair before reading anything. A mislabelled Kameoka menu is invisible to
     // every query below — that is how two October Mondays went out to Uzumasa
-    // alone while the workflow that caused it kept reporting success. The repair
-    // refuses to guess (see utils/campusNormalize): a row it cannot prove is
-    // reported and left untouched, never reassigned on a hunch.
+    // alone while the workflow that caused it kept reporting success, and why the
+    // third week was caught in the table before it could repeat. The repair
+    // covers the whole week ahead, not just today: the scrape writes a week at a
+    // time, so leaving Tuesday to Friday under 'Unknown' is the same failure with
+    // a one-day delay. It refuses to guess (see utils/campusNormalize): a row it
+    // cannot prove is reported and left untouched, never reassigned on a hunch.
     let repairNote = null;
+    let refusedNote = null;
     try {
-      const repair = await db.repairUnknownCampus(today, today);
+      const { from: repairFrom, to: repairTo } = db.repairWindow();
+      const repair = await db.repairUnknownCampus(repairFrom, repairTo);
       if (repair.relabelled > 0 || repair.deleted > 0) {
         repairNote =
           '🧹 **Mislabelled campus rows repaired before publishing**\n' +
-          `${repair.relabelled} row(s) for ${today} were filed under an unrecognised campus and have been relabelled to Kameoka` +
+          `${repair.relabelled} row(s) between ${repairFrom} and ${repairTo} were filed under an unrecognised campus and have been relabelled to Kameoka` +
           (repair.deleted ? `; ${repair.deleted} duplicate row(s) removed` : '') +
           '.\nThe n8n parser is still writing that bad campus value — its Kameoka branch needs fixing.';
         logger.warn(repairNote.replace(/\n/g, ' '));
       } else if (repair.skipped > 0) {
-        logger.warn(
-          `⚠️ ${repair.skipped} row(s) for ${today} sit under an unrecognised campus and could not be proven Kameoka — left alone`
-        );
+        // Refused rows are the one case the bot cannot fix itself, so the admin
+        // needs the reason, not just a count: the reason names the categories
+        // and slots that were seen, which is what decides whether the pipeline
+        // is writing the wrong campus or the wrong category.
+        const refused = (repair.groups || []).filter((group) => !group.campus).slice(0, 5);
+        const detail = refused.map((group) => `• ${group.date}: ${group.rows} row(s) — ${group.reason}`).join('\n');
+        refusedNote =
+          '⚠️ **Unrecognised campus rows could not be repaired**\n' +
+          `${repair.skipped} row(s) in ${repairFrom}..${repairTo} sit under a campus the bot cannot match, and nothing proved which campus they belong to:\n` +
+          (detail || '• (no per-date detail available)') +
+          '\nThose days will have no Kameoka menu until the pipeline is fixed.';
+        logger.warn(refusedNote.replace(/\n/g, ' '));
       }
     } catch (err) {
       // Never let the repair stop a publish: the menu may still go out fine.
@@ -244,15 +258,18 @@ async function publishMenu(client, options = {}) {
 
     // A repair is worth a DM even on an otherwise clean run: the menus went out,
     // but only because a mislabelled batch was patched on the way past. This
-    // reports the scraper as still broken, not the bot as fine.
-    if (repairNote && process.env.BOT_ADMIN_ID && !manual) {
-      try {
-        const admin = await client.users.fetch(process.env.BOT_ADMIN_ID);
-        if (admin) {
-          await admin.send({ content: repairNote });
+    // reports the scraper as still broken, not the bot as fine. A refusal is
+    // worse — that day's menu is missing — so it is DMed too, with the reason.
+    if (process.env.BOT_ADMIN_ID && !manual) {
+      for (const note of [repairNote, refusedNote].filter(Boolean)) {
+        try {
+          const admin = await client.users.fetch(process.env.BOT_ADMIN_ID);
+          if (admin) {
+            await admin.send({ content: note });
+          }
+        } catch (error) {
+          logger.warn(`Could not send campus repair alert: ${error.message}`);
         }
-      } catch (error) {
-        logger.warn(`Could not send repair alert: ${error.message}`);
       }
     }
   } catch (error) {

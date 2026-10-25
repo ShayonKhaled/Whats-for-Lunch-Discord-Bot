@@ -7,15 +7,40 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
 
+### Fixed
+- **A mislabelled Kameoka week is now repaired as a week, not a day.** The
+  scrape writes Monday–Friday in one pass, so the 2026-10-19 week landing under
+  `campus = 'Unknown'` showed up as an entire week of "unknown campus, no
+  prices" — the dashboard and `/nextmenu` saw nothing for Kameoka from Tuesday
+  on, and `/nextmenu` answered "the cafeteria is closed" while the menu sat in
+  the table. The publish, the 05:30 data check and `/nextmenu` now repair
+  `today..today+7` (`db.repairWindow()`), and opening a day in the dashboard
+  repairs that day before rendering it. `npm run fix:campus` defaults to the
+  same window; `--all` still means every date on record.
+- **A curry-and-ramen-only week is no longer refused.** The classifier demanded a
+  Kameoka-only *category* (`Set`, `Live Kitchen`, `Side Dish`), so a week whose
+  menu was only curry and ramen — categories both campuses use — could not be
+  proven and stayed under `Unknown`. It now also reads category + subcategory
+  slots: `Curry|||A/B/C` is Kameoka's while `Curry|||Curry` and
+  `Curry|||Curry Set` are Uzumasa's, and one Uzumasa-only slot still vetoes the
+  whole group.
+- **Rows with `campus` NULL are repaired too.** `NULL <> ALL(…)` is NULL rather
+  than true, so a parser that lost the value by writing NULL instead of
+  `'Unknown'` produced rows the repair never selected. It matches both now.
+- The dashboard's price column says what `—` means — the value the scraper
+  stored, which the post fills from the last scraped price — instead of reading
+  like a menu that went out priceless.
+
 ### Added
 - **Campus-label self-repair.** Before each publish the bot relabels menu rows
   the scraper filed under an unrecognised campus — but only when the categories
-  prove the campus (`src/utils/campusNormalize.js`): a Kameoka-only category
-  present (`Set`, `Live Kitchen`, `Side Dish`) and none that is Uzumasa-only
-  (`Set Meals`, `A La Carte`, `Noodles`, `Sides`, `Halal`). Categories both
-  campuses use (`Curry`, `Ramen`) prove nothing, so such a batch is reported and
-  left alone rather than guessed at. A row that would collide with an existing
-  row of the target campus is a duplicate from a re-run and is deleted instead.
+  or their slots prove the campus (`src/utils/campusNormalize.js`): a
+  Kameoka-only marker present (`Set`, `Live Kitchen`, `Side Dish`, `Curry|||A/B/C`)
+  and none that is Uzumasa-only (`Set Meals`, `A La Carte`, `Noodles`, `Sides`,
+  `Halal`, `Curry|||Curry`). Categories both campuses use (`Curry`, `Ramen`)
+  prove nothing on their own, so such a batch is reported and left alone rather
+  than guessed at. A row that would collide with an existing row of the target
+  campus is a duplicate from a re-run and is deleted instead.
   Every repair is logged and DMed to `BOT_ADMIN_ID`, because a repair means the
   n8n parser is *still* writing the bad value.
 - `npm run fix:campus` — the same repair by hand, dry run by default

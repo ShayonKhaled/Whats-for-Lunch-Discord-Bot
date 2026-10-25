@@ -9,7 +9,7 @@ reading them back off the machine. All three are installed in
 | Unit | What it does |
 |---|---|
 | `wfl-bot.service` | The bot itself. Long-running, restarts on failure, reads `.env`. |
-| `wfl-data-check.service` | One-shot: validates the scraped menu data and DMs `BOT_ADMIN_ID` when it is wrong or incomplete. |
+| `wfl-data-check.service` | One-shot: relabels menu rows it can prove were filed under the wrong campus, then validates the scraped data and DMs `BOT_ADMIN_ID` when what is left is wrong or incomplete. |
 | `wfl-data-check.timer` | Runs the check at 05:30 JST on weekdays — half an hour before the 06:00 post, so bad data is reported before it is published. |
 
 ```bash

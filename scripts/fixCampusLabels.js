@@ -42,9 +42,9 @@ function parseArgs(argv) {
 const USAGE = `Usage: node scripts/fixCampusLabels.js [--apply] [--all] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 
   --apply   write the changes (default is a dry run)
-  --all     every date on record, not just today
+  --all     every date on record, not just the current menu week
   --from    start of the date range (default: today)
-  --to      end of the date range (default: today)`;
+  --to      end of the date range (default: today + 7, the menu week ahead)`;
 
 async function run() {
   const args = parseArgs(process.argv.slice(2));
@@ -54,8 +54,11 @@ async function run() {
   }
 
   const today = todayCampus();
-  const from = args.from || (args.all ? '1970-01-01' : today);
-  const to = args.to || (args.all ? '2999-12-31' : today);
+  // The weekly scrape writes Mon-Fri in one go, so the date range that matters
+  // is the week ahead, not just today — see db.repairWindow.
+  const window = db.repairWindow(today);
+  const from = args.from || (args.all ? '1970-01-01' : window.from);
+  const to = args.to || (args.all ? '2999-12-31' : window.to);
 
   await db.initConnection();
   console.log(`Scanning ${from} .. ${to} for rows with an unrecognised campus${args.apply ? '' : ' (dry run)'}`);

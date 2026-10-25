@@ -47,3 +47,47 @@ test('Uzumasa-only categories are never treated as Kameoka markers', () => {
     assert.strictEqual(verdict.campus, null, `${category} must not be relabelled`);
   }
 });
+
+// ── Slot-level evidence ─────────────────────────────────────────────────────
+// The category can be shared while the slot is not: Kameoka's curry slots are A,
+// B and C while Uzumasa's are 'Curry' and 'Curry Set'. A week that lands under
+// 'Unknown' with a curry-and-ramen-only menu therefore has no Kameoka-only
+// category to prove it, and the slot name is the only evidence there is.
+
+test('a shared-category week is proven by its slots', () => {
+  const verdict = classifyUnknownRows([
+    row('Curry', { subcategory: 'A' }),
+    row('Curry', { subcategory: 'B' }),
+    row('Ramen', { subcategory: 'Ramen' }),
+  ]);
+
+  assert.strictEqual(verdict.campus, 'Kameoka');
+  assert.deepStrictEqual(verdict.kameokaSlots, ['Curry|||A', 'Curry|||B']);
+});
+
+test("Uzumasa's own curry slot vetoes a group, whatever else it holds", () => {
+  // 'Curry|||Curry' is Uzumasa's; a batch mixing it with Kameoka curry slots is
+  // a batch nobody can attribute, so it must be left alone.
+  const verdict = classifyUnknownRows([
+    row('Curry', { subcategory: 'Curry' }),
+    row('Curry', { subcategory: 'A' }),
+  ]);
+
+  assert.strictEqual(verdict.campus, null);
+  assert.match(verdict.reason, /Uzumasa-only/);
+  assert.deepStrictEqual(verdict.uzumasaSlots, ['Curry|||Curry']);
+});
+
+test('shared slots alone still prove nothing', () => {
+  // "Ramen|||Ramen" is not listed as a Kameoka marker: a stray Uzumasa ramen row
+  // must never vouch for a group on its own.
+  const verdict = classifyUnknownRows([row('Ramen', { subcategory: 'Ramen' })]);
+
+  assert.strictEqual(verdict.campus, null);
+  assert.match(verdict.reason, /no positive Kameoka evidence/);
+});
+
+test('a row with no subcategory falls back to the category evidence', () => {
+  assert.strictEqual(classifyUnknownRows([row('Side Dish')]).campus, 'Kameoka');
+  assert.strictEqual(classifyUnknownRows([row('Curry')]).campus, null);
+});

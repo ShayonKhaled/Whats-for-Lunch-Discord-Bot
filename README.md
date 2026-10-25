@@ -280,6 +280,12 @@ the failure worth chasing, and it looks identical to the first in the raw tables
 
 `/` and `/api/status` are unchanged, so Uptime Kuma is unaffected.
 
+Opening a day repairs provable campus labels for that date first (the same
+repair the 6 AM post runs), so the view shows the menu the bot would publish
+rather than an `Unknown` batch it is about to relabel anyway. That is the only
+write the read endpoints can perform, and it can only ever apply what
+`utils/campusNormalize` proves.
+
 **Access control.** With `DASHBOARD_TOKEN` unset the read endpoints are open —
 fine for a bot only reachable on a home LAN — and the re-publish endpoint is
 disabled and returns 503. Setting a token requires it on every dashboard
@@ -388,20 +394,28 @@ Run `npm run register` and wait up to one hour. For instant results during testi
 The scraper occasionally writes Kameoka rows with `campus = 'Unknown'` (its n8n
 parser falls back to that string when the Kameoka branch loses the value). The
 bot matches campus exactly and will never see those rows. The publisher repairs
-provable labels before each run and DMs the admin when it has to, so a silent
-miss should not recur — but the parser still needs fixing in the workflow.
+provable labels before each run and DMs the admin when it has to, and it covers
+**the whole menu week ahead**, not just today — the scrape writes Monday to
+Friday in one go, so repairing one day would leave the rest of the week looking
+empty in the dashboard and in `/nextmenu`. The pre-dawn data check repairs the
+same way, and so does asking the dashboard for a day, so a mislabelled week is
+fixed the first time anything looks at it. The parser still needs fixing in the
+workflow.
 To check or repair by hand:
 
 ```bash
-npm run fix:campus                      # today, dry run — prints what it would change
-npm run fix:campus -- --apply           # today, write the changes
+npm run fix:campus                      # today + the week ahead, dry run — prints what it would change
+npm run fix:campus -- --apply           # same, write the changes
 npm run fix:campus -- --all --apply     # every date on record
 npm run check:data                      # broader data-quality report
 ```
 
-It only relabels a date's rows when the categories prove the campus — a
-Kameoka-only category present and no Uzumasa-only one — and deletes a row only
-when the same dish already exists for the campus it is moving to.
+It only relabels a date's rows when their categories or their category +
+subcategory slots prove the campus — a Kameoka-only marker present and none that
+is Uzumasa-only — and deletes a row only when the same dish already exists for
+the campus it is moving to. A week that is curry and ramen only is proven by its
+slots (`Curry|||A`, `Curry|||B`, …): those names belong to Kameoka, while
+Uzumasa's curry slots are `Curry|||Curry` and `Curry|||Curry Set`.
 
 **Prices missing from a menu**
 The scraper drops the `price` field from time to time — every week since
@@ -409,7 +423,9 @@ The scraper drops the `price` field from time to time — every week since
 scraped for that menu slot (most recent priced week, per category and
 subcategory), so a dropped field no longer blanks the prices. A slot that has
 never carried a price shows none. Either way, run `npm run check:data`: it
-reports the NULLs and the fix belongs in the pipeline's field mapping.
+reports the NULLs and the fix belongs in the pipeline's field mapping. The
+admin dashboard deliberately shows the stored value, so `—` in its price column
+means "the scraper omitted it", not "the post went out without a price".
 
 **Menu not posting at 6 AM**
 - Verify menu data exists: `SELECT campus, COUNT(*) FROM menu_items WHERE menu_date::date = CURRENT_DATE GROUP BY campus;`

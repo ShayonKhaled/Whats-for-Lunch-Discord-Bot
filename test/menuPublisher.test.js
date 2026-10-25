@@ -333,7 +333,14 @@ test('repairs mislabelled campus rows before reading any menu', async () => {
 
   assert.strictEqual(calls.repairs.length, 1, 'the repair runs once per publish');
   assert.strictEqual(calls.repairs[0].from, JST_DATE);
-  assert.strictEqual(calls.repairs[0].to, JST_DATE);
+  // A whole week, not just today: the scrape writes Mon-Fri in one go, so
+  // repairing today alone leaves the rest of the week under 'Unknown' until each
+  // morning's post — the dashboard and /nextmenu show it as missing until then.
+  assert.strictEqual(
+    calls.repairs[0].to,
+    '2026-08-20',
+    'the repair must cover the week ahead, not just today'
+  );
   assert.strictEqual(
     calls.repairs[0].menusReadSoFar,
     0,
@@ -356,13 +363,42 @@ test('a repair is reported to the admin even when every menu went out', async ()
 
 test('rows whose campus cannot be proven are left alone, not guessed at', async () => {
   const calls = mockDb({ repair: { relabelled: 0, skipped: 11 } });
-  const { client, sent, dms } = makeClient();
+  const { client, sent } = makeClient();
 
   await publishMenu(client);
 
   assert.strictEqual(sent.length, 1, 'an unprovable label must not block the publish');
-  assert.strictEqual(dms.length, 0, 'and raises no repair claim it cannot stand behind');
   assert.ok(calls.repairs.length === 1);
+});
+
+test('a refused label is reported with the reason, because only a human can fix it', async () => {
+  // The bot could not decide, so the day's Kameoka menu is missing. The admin
+  // needs the evidence the classifier saw — the categories and slots — to tell
+  // whether the pipeline is writing the wrong campus or the wrong category.
+  process.env.BOT_ADMIN_ID = '999';
+  mockDb({
+    repair: {
+      relabelled: 0,
+      skipped: 11,
+      groups: [
+        {
+          date: JST_DATE,
+          rows: 11,
+          campus: null,
+          reason: 'only shared categories (Curry, Ramen) and slot(s) (Curry|||Curry) — no positive Kameoka evidence',
+        },
+      ],
+    },
+  });
+  const { client, dms } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(dms.length, 1, 'the missing menu must not be silent');
+  assert.match(dms[0].content, /could not be repaired/);
+  assert.match(dms[0].content, new RegExp(`${JST_DATE}: 11 row\\(s\\)`));
+  assert.match(dms[0].content, /Curry\|\|\|Curry/);
+  assert.doesNotMatch(dms[0].content, /relabelled to Kameoka/, 'it must not claim a repair it did not make');
 });
 
 test('a failing repair does not stop the publish', async () => {

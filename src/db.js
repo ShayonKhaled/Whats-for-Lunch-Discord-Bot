@@ -1,7 +1,15 @@
 const { Pool } = require('pg');
 const logger = require('./utils/logger');
-const { todayCampus } = require('./utils/campusDate');
+const { todayCampus, shiftDate } = require('./utils/campusDate');
 const { classifyUnknownRows, KNOWN_CAMPUSES } = require('./utils/campusNormalize');
+
+// How far ahead the automatic campus-label repair looks. The weekly scrape
+// writes a whole week — usually Friday, for the Monday after — so repairing only
+// today's rows leaves Tuesday to Friday sitting under 'Unknown' in every view
+// (dashboard, /nextmenu) until each one's own 6 AM post. Repairing the week in
+// one pass is the difference between "Kameoka is missing this week" and it
+// being there.
+const REPAIR_HORIZON_DAYS = 7;
 
 let pool;
 
@@ -217,8 +225,15 @@ async function getLastKnownPrices(campus, beforeDate = todayCampus()) {
  * and subcategory) is a duplicate from a re-run, so it is deleted instead; the
  * unique index would reject the update otherwise.
  *
+ * Rows with a NULL campus are matched as well as an unknown string: a parser
+ * that loses the value can write either, and `NULL <> ALL(…)` is NULL — not
+ * true — so the NULLs would otherwise be skipped in silence.
+ *
  * Everything is applied in one transaction, so a failure part-way leaves the
  * table exactly as it was. Pass `{ apply: false }` to report without writing.
+ *
+ * Callers normally cover the menu week ahead rather than one day — see
+ * repairWindow().
  *
  * @param {string} fromDate YYYY-MM-DD, inclusive
  * @param {string} toDate   YYYY-MM-DD, inclusive
@@ -231,9 +246,12 @@ async function repairUnknownCampus(fromDate, toDate, options = {}) {
   try {
     const rows = (
       await pool.query(
+        // `campus IS NULL` as well as an unknown string: a parser that loses the
+        // value can write NULL just as easily as 'Unknown', and `NULL <> ALL(…)`
+        // is NULL — not true — so those rows would be invisible to the repair.
         `SELECT id, menu_date, campus, category, subcategory, dish_name
            FROM menu_items
-          WHERE campus <> ALL($1::text[])
+          WHERE (campus IS NULL OR campus <> ALL($1::text[]))
             AND menu_date::date BETWEEN $2::date AND $3::date
           ORDER BY menu_date, id`,
         [KNOWN_CAMPUSES, fromDate, toDate]
@@ -322,6 +340,24 @@ async function repairUnknownCampus(fromDate, toDate, options = {}) {
     logger.error(`Error repairing unknown-campus rows: ${err.message}`);
     throw err;
   }
+}
+
+/**
+ * The date range the automatic campus-label repair covers: today through the
+ * rest of the menu week.
+ *
+ * The weekly scrape lands a whole week at once, so a lost campus value is never
+ * a one-day problem: it is the entire week under 'Unknown'. Repairing only
+ * today's slice left the rest of the week looking empty in the dashboard and
+ * made /nextmenu answer "the cafeteria is closed" for a campus whose menu was
+ * sitting right there. Every caller still only relabels rows whose categories or
+ * slots prove the campus (see utils/campusNormalize).
+ *
+ * @param {string} [today] YYYY-MM-DD; defaults to today in JST
+ * @returns {{from: string, to: string}}
+ */
+function repairWindow(today = todayCampus()) {
+  return { from: today, to: shiftDate(today, REPAIR_HORIZON_DAYS) };
 }
 
 async function hasSuccessfulDelivery(guildId, campus, menuDate) {
@@ -608,7 +644,9 @@ module.exports = {
   getMenuByDate,
   getNextMenu,
   getLastKnownPrices,
+  repairWindow,
   repairUnknownCampus,
+  REPAIR_HORIZON_DAYS,
   hasSuccessfulDelivery,
   logDelivery,
   getSubscriptionByGuildId,

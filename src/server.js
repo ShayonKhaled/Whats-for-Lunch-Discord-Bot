@@ -187,6 +187,14 @@ async function handleRequest(req, res) {
       sendJson(res, 400, { error: 'A ?date=YYYY-MM-DD parameter is required' });
       return;
     }
+    // Repair provable labels for the day before showing it. The dashboard is
+    // where a mislabelled week gets noticed, and a row the bot can prove should
+    // not be presented as an unrepairable 'Unknown' — a read is also a good
+    // moment to fix it, because the admin is looking at exactly that day. A
+    // failed repair is logged and the view still renders what the table holds.
+    await db
+      .repairUnknownCampus(date, date)
+      .catch((err) => logger.warn(`Campus label repair skipped for dashboard ${date}: ${err.message}`));
     sendJson(res, 200, { date, items: await db.getMenuItemsForDate(date) });
     return;
   }

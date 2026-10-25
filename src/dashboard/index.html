@@ -394,7 +394,16 @@ function menuTable(items) {
   const byCampus = {};
   for (const it of items) (byCampus[it.campus] ||= []).push(it);
 
-  return Object.entries(byCampus).map(([campus, rows]) => `
+  // The price column is what the scraper stored, not what the post shows: a
+  // dropped price field is carried forward from the last scraped one at render
+  // time (db.getLastKnownPrices). Saying so stops "—" reading as "the bot
+  // posted no prices".
+  const unpriced = items.filter((it) => it.price == null).length;
+  const priceNote = unpriced === 0
+    ? ''
+    : `<p class="sub" style="margin:4px 0">${unpriced} row(s) arrived with no scraped price — the posted menu falls back to the last price scraped for that slot, so "—" here does not mean "—" in Discord.</p>`;
+
+  return priceNote + Object.entries(byCampus).map(([campus, rows]) => `
     <h3>${esc(campus)} — ${rows.length} item${rows.length === 1 ? '' : 's'}</h3>
     <div class="scroll"><table>
       <thead><tr><th>Category</th><th>Dish</th><th class="num">Price</th><th class="num">kcal</th></tr></thead>

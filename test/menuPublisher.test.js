@@ -58,6 +58,19 @@ function menuItem(overrides = {}) {
   };
 }
 
+/**
+ * A day that clears MIN_ITEMS_PER_DAY with distinct slots, so tests that do not
+ * care about menu size are not accidentally exercising the incomplete-scrape path.
+ */
+function menuItems(base = {}) {
+  return [
+    { subcategory: 'Campus Lunch (1)', dish_name: 'Beef Cutlet' },
+    { subcategory: 'Campus Lunch (2)', dish_name: 'Grilled Salmon' },
+    { category: 'Curry', subcategory: 'Curry', dish_name: 'Original Curry' },
+    { category: 'Noodles', subcategory: 'Ramen', dish_name: 'Soy Sauce Ramen' },
+  ].map((row) => menuItem({ ...base, ...row }));
+}
+
 /** A Discord client stub that records what would have been sent. */
 function makeClient({ channelMissing = false, canSend = true } = {}) {
   const sent = [];
@@ -88,7 +101,7 @@ function makeClient({ channelMissing = false, canSend = true } = {}) {
 }
 
 /** Install the default happy-path database mocks. Returns recorded calls. */
-function mockDb({ alreadySent = false, items = [menuItem()], subs = [subscription()], repair = null, repairError = null, lastKnownPrices = new Map() } = {}) {
+function mockDb({ alreadySent = false, items = menuItems(), subs = [subscription()], repair = null, repairError = null, lastKnownPrices = new Map() } = {}) {
   const calls = { deliveryChecks: [], logged: [], repairs: [] };
 
   mock.method(db, 'getActiveSubscriptions', async () => subs);
@@ -445,9 +458,18 @@ test('the scheduled run keeps the signal a manual run suppresses', async () => {
 // last prices that were actually scraped.
 
 test('the menu carries a price even when the scrape dropped it', async () => {
+  const kameokaRow = (subcategory, dish_name) =>
+    menuItem({ campus: 'Kameoka', category: 'Curry', subcategory, dish_name, price: null });
   mockDb({
     subs: [subscription({ campus: 'Kameoka' })],
-    items: [menuItem({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: null })],
+    // Four rows: a day with fewer than MIN_ITEMS_PER_DAY is now treated as an
+    // incomplete scrape (see the test below), which has nothing to do with prices.
+    items: [
+      kameokaRow('A', 'Original Curry'),
+      kameokaRow('B', 'Cardamon Curry'),
+      kameokaRow('C', 'Dry Curry with Ground Meat'),
+      menuItem({ campus: 'Kameoka', category: 'Ramen', subcategory: 'Ramen', dish_name: 'Soy Sauce Ramen', price: null }),
+    ],
     lastKnownPrices: new Map([['Curry|||A', 350]]),
   });
   const { client, sent } = makeClient();
@@ -455,4 +477,32 @@ test('the menu carries a price even when the scrape dropped it', async () => {
   await publishMenu(client);
 
   assert.match(sent[0].content, /¥350/, 'a priceless week must still show prices');
+});
+
+// ── Incomplete scrapes ───────────────────────────────────────────────────────
+// On 2026-11-10 the weekly email never arrived, so the only row for the day was
+// the monthly Halal dish: Uzumasa subscribers got a "menu" with one item. A
+// handful of rows is a partial scrape, not a menu.
+
+test('a near-empty day is skipped rather than posted as a one-item menu', async () => {
+  const calls = mockDb({
+    items: [menuItem({ category: 'Halal', subcategory: 'Halal', dish_name: 'Chicken Curry', price: null })],
+  });
+  const { client, sent } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(sent.length, 0, 'one dish is not a menu');
+  assert.strictEqual(calls.logged.length, 1);
+  assert.strictEqual(calls.logged[0].status, 'skipped');
+  assert.match(calls.logged[0].error, /Only 1 item\(s\)/);
+});
+
+test('a day with enough items is still posted', async () => {
+  mockDb({ items: menuItems() });
+  const { client, sent } = makeClient();
+
+  await publishMenu(client);
+
+  assert.strictEqual(sent.length, 1, 'four items is a usable menu');
 });

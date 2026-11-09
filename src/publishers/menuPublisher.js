@@ -8,6 +8,11 @@ const { formatMenuMessage } = require('../utils/formatMenu');
 const uptimeKuma = require('../utils/uptimeKuma');
 const { POSTING_TIME } = require('../config/cafeteria');
 const { todayCampus } = require('../utils/campusDate');
+// The same bar the pre-dawn data check uses for "a usable menu". One or two rows
+// is not a menu: on 2026-11-10 the weekly email had never arrived, so the only
+// row for the day was the monthly Halal dish and Uzumasa subscribers were sent a
+// message containing exactly one item.
+const { MIN_ITEMS_PER_DAY } = require('../utils/dataQuality');
 
 let scheduledJob = null;
 
@@ -112,6 +117,30 @@ async function publishMenu(client, options = {}) {
               today,
               'skipped',
               'No menu published for this date'
+            )
+            .catch((err) => logger.error(`Failed to log skip: ${err.message}`));
+        }
+        skipCount += subs.length;
+        continue;
+      }
+
+      // A handful of rows is a partial scrape, not a menu — the weekly email
+      // missing entirely leaves only the monthly Halal dish behind, and posting
+      // that tells subscribers the cafeteria is serving one thing today. Skip it
+      // the same way as an empty day, with the count in the log.
+      if (menuItems.length < MIN_ITEMS_PER_DAY) {
+        logger.warn(
+          `⚠️ Only ${menuItems.length} item(s) for ${campus} Campus today (expected at least ${MIN_ITEMS_PER_DAY}) — treating as an incomplete scrape and skipping`
+        );
+        for (const subscription of subs) {
+          await db
+            .logDelivery(
+              subscription.guild_id,
+              subscription.channel_id,
+              campus,
+              today,
+              'skipped',
+              `Only ${menuItems.length} item(s) for this date — suspected incomplete scrape`
             )
             .catch((err) => logger.error(`Failed to log skip: ${err.message}`));
         }

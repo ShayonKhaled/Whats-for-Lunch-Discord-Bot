@@ -71,6 +71,7 @@ const KAMEOKA_MENU_ORDER = [
   { key: 'Curry|||B',                   emoji: '🍛', label: 'Curry B' },
   { key: 'Curry|||C',                   emoji: '🍛', label: 'Curry C' },
   { key: 'Ramen|||Ramen',               emoji: '🍜', label: 'Ramen' },
+  { key: 'Noodles|||Udon and Soba',     emoji: '🍝', label: 'Udon and Soba' },
   { key: 'Side Dish|||A',               emoji: '🥗', label: 'Side A' },
   { key: 'Side Dish|||B',               emoji: '🥗', label: 'Side B' },
   { key: 'Side Dish|||C',               emoji: '🥗', label: 'Side C' },
@@ -81,15 +82,95 @@ const KAMEOKA_CATEGORY_EMOJIS = {
   'Set Meals':    '🍱',
   'Live Kitchen': '🍳',
   'Curry':        '🍛',
-  'Ramen':        '🍜',
+  'Noodles':      '🍜',
   'Sides':        '🥗',
 };
 
 /** Maps Kameoka DB category names to Uzumasa-style display names. */
 const KAMEOKA_CATEGORY_LABELS = {
   'Set':       'Set Meals',
+  'Ramen':     'Noodles',
+  'Noodles':   'Noodles',
   'Side Dish': 'Sides',
 };
+
+/**
+ * Standing Kameoka Udon & Soba options (¥130) that are always available at the
+ * counter but omitted from the scraped Kameoka menu sheet. Injected under the
+ * same `🍜 Noodles` section as Ramen unless already present in the scraped rows.
+ */
+const KAMEOKA_STANDING_UDON_SOBA = [
+  {
+    campus: 'Kameoka',
+    category: 'Noodles',
+    subcategory: 'Udon and Soba',
+    dish_name: 'Wakame (seaweed) udon',
+    allergens: 'Wheat',
+    calories: null,
+    protein: null,
+    fat: null,
+    sodium: null,
+    price: 130,
+  },
+  {
+    campus: 'Kameoka',
+    category: 'Noodles',
+    subcategory: 'Udon and Soba',
+    dish_name: 'Wakame (seaweed) soba noodles',
+    allergens: 'Eggs, Wheat, Soba',
+    calories: null,
+    protein: null,
+    fat: null,
+    sodium: null,
+    price: 130,
+  },
+  {
+    campus: 'Kameoka',
+    category: 'Noodles',
+    subcategory: 'Udon and Soba',
+    dish_name: 'Kitsune (fried tofu) udon',
+    allergens: 'Wheat',
+    calories: null,
+    protein: null,
+    fat: null,
+    sodium: null,
+    price: 130,
+  },
+  {
+    campus: 'Kameoka',
+    category: 'Noodles',
+    subcategory: 'Udon and Soba',
+    dish_name: 'Kitsune (fried tofu) soba noodles',
+    allergens: 'Eggs, Wheat, Soba',
+    calories: null,
+    protein: null,
+    fat: null,
+    sodium: null,
+    price: 130,
+  },
+];
+
+/**
+ * Return `items` augmented with standing counter items for the campus (when
+ * those items are not already present in the scraped rows).
+ */
+function withStandingItems(items, campus) {
+  if (!Array.isArray(items) || items.length === 0) return items;
+  if (campus !== 'Kameoka') return items;
+
+  const hasUdonSoba = items.some(
+    (item) => item.category === 'Noodles' && item.subcategory === 'Udon and Soba'
+  );
+  if (hasUdonSoba) return items;
+
+  const first = items[0];
+  const standing = KAMEOKA_STANDING_UDON_SOBA.map((dish) => ({
+    ...dish,
+    menu_date: first.menu_date,
+    day_name: first.day_name,
+  }));
+  return [...items, ...standing];
+}
 
 // ── Campus config lookup ────────────────────────────────────────────────────
 
@@ -187,13 +268,15 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa', fa
     return studentPrice(campus, slot.category, carried);
   };
 
-  const firstItem = items[0];
+  const effectiveItems = withStandingItems(items, campus);
+
+  const firstItem = effectiveItems[0];
   const menuDate = firstItem.menu_date;
   const dayName = (firstItem.day_name || '').trim();
 
   // Group items by category and subcategory
   const grouped = {};
-  for (const item of items) {
+  for (const item of effectiveItems) {
     const key = `${item.category}|||${item.subcategory}`;
     if (!grouped[key]) {
       grouped[key] = [];
@@ -202,8 +285,8 @@ function formatMenuMessage(items, ratingsMap = new Map(), campus = 'Uzumasa', fa
   }
 
   // ── Debug: log every item so we can see what the DB actually returned ──────
-  logger.debug(`[formatMenu] campus=${campus} date=${items[0]?.menu_date} totalItems=${items.length}`);
-  for (const item of items) {
+  logger.debug(`[formatMenu] campus=${campus} date=${effectiveItems[0]?.menu_date} totalItems=${effectiveItems.length}`);
+  for (const item of effectiveItems) {
     logger.debug(`[formatMenu]   item: campus=${item.campus} category="${item.category}" subcategory="${item.subcategory}" dish="${item.dish_name}"`);
   }
   const groupedKeys = Object.keys(grouped);
@@ -341,4 +424,4 @@ function getMenuOrderIndex(category, subcategory, campus = 'Uzumasa') {
   });
 }
 
-module.exports = { formatMenuMessage, getMenuOrderIndex };
+module.exports = { formatMenuMessage, getMenuOrderIndex, withStandingItems, KAMEOKA_STANDING_UDON_SOBA };

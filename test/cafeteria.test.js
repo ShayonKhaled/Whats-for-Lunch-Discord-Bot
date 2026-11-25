@@ -100,23 +100,23 @@ test('Uzumasa listed prices convert to the campaigned student prices', () => {
   }
 });
 
-test('Kameoka has no student discount, so listed price passes through', () => {
-  assert.strictEqual(studentPrice('Kameoka', 'Set', 500), 500);
-  assert.strictEqual(studentPrice('Kameoka', 'Curry', 350), 350);
+test('Kameoka main categories use the updated fixed student prices while sides stay scraped', () => {
+  assert.strictEqual(studentPrice('Kameoka', 'Set', 500), 330);
+  assert.strictEqual(studentPrice('Kameoka', 'Set', null), 330);
+  assert.strictEqual(studentPrice('Kameoka', 'Live Kitchen', 450), 280);
+  assert.strictEqual(studentPrice('Kameoka', 'Live Kitchen', 500), 280);
+  assert.strictEqual(studentPrice('Kameoka', 'Curry', 350), 230);
+  assert.strictEqual(studentPrice('Kameoka', 'Ramen', 380), 230);
+  assert.strictEqual(studentPrice('Kameoka', 'Noodles', 250), 130);
+  // Side dishes keep their scraped listed price unchanged.
   assert.strictEqual(studentPrice('Kameoka', 'Side Dish', 70), 70);
-});
-
-test('Live Kitchen is its own tier and is undiscounted', () => {
-  // Counter service at Kameoka; kept as a distinct tier so it can be changed
-  // independently of the Set Meals rate.
-  assert.strictEqual(studentPrice('Kameoka', 'Live Kitchen', 450), 450);
-  assert.strictEqual(studentPrice('Kameoka', 'Live Kitchen', 500), 500);
+  assert.strictEqual(studentPrice('Kameoka', 'Side Dish', 100), 100);
 });
 
 test('a missing listed price yields null rather than a bogus discount', () => {
   assert.strictEqual(studentPrice('Uzumasa', 'Set Meals', null), null);
   assert.strictEqual(studentPrice('Uzumasa', 'Set Meals', undefined), null);
-  assert.strictEqual(studentPrice('Kameoka', 'Set', null), null);
+  assert.strictEqual(studentPrice('Kameoka', 'Side Dish', null), null);
 });
 
 test('an unknown category is treated as undiscounted, not dropped', () => {
@@ -154,7 +154,7 @@ test('a scraped Uzumasa listed price wins over the fallback table', () => {
   assert.doesNotMatch(chunk, /¥260/);
 });
 
-test('Kameoka renders its listed price unchanged', () => {
+test('Kameoka renders its updated prices and keeps Side Dish prices unchanged', () => {
   const [chunk] = formatMenuMessage(
     [
       {
@@ -162,11 +162,17 @@ test('Kameoka renders its listed price unchanged', () => {
         category: 'Curry', subcategory: 'A',
         dish_name: 'Original Curry', calories: 658, price: 350,
       },
+      {
+        campus: 'Kameoka', menu_date: '2026-08-18', day_name: 'Tuesday',
+        category: 'Side Dish', subcategory: 'A',
+        dish_name: 'Spinach Salad', calories: 65, price: 70,
+      },
     ],
     new Map(),
     'Kameoka'
   );
-  assert.match(chunk, /¥350/);
+  assert.match(chunk, /## 🍛 Curry\s+·\s+¥230/);
+  assert.match(chunk, /## 🥗 Sides\s+·\s+¥70/);
 });
 
 test('halal is a flat 400 whatever the scraper reports', () => {

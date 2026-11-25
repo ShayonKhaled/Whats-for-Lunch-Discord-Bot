@@ -32,30 +32,31 @@ test('returns a placeholder when there are no items', () => {
 
 // ── Prices the scraper dropped ───────────────────────────────────────────────
 // The Kameoka parser lost the price field from 2026-10-05, so whole weeks posted
-// with no ¥ figures. The formatter stands in the last price actually scraped for
-// that menu slot — never an invented one.
+// with no ¥ figures. For categories whose prices still come from the scraper
+// (such as Side Dish), the formatter stands in the last price actually scraped
+// for that menu slot — never an invented one.
 
 test('a price missing from the scrape falls back to the last published one', () => {
   const [first] = formatMenuMessage(
-    [dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: null })],
+    [dish({ campus: 'Kameoka', category: 'Side Dish', subcategory: 'A', dish_name: 'Spinach Gomaae', price: null })],
     new Map(),
     'Kameoka',
-    new Map([['Curry|||A', 350]])
+    new Map([['Side Dish|||A', 70]])
   );
 
-  assert.match(first, /¥350/, 'a priceless week must still show prices');
+  assert.match(first, /## 🥗 Sides\s+·\s+¥70/, 'a priceless week must still show prices');
 });
 
 test('a scraped price always wins over the fallback', () => {
   const [first] = formatMenuMessage(
-    [dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: 400 })],
+    [dish({ campus: 'Kameoka', category: 'Side Dish', subcategory: 'A', dish_name: 'Spinach Gomaae', price: 90 })],
     new Map(),
     'Kameoka',
-    new Map([['Curry|||A', 350]])
+    new Map([['Side Dish|||A', 70]])
   );
 
-  assert.match(first, /¥400/);
-  assert.doesNotMatch(first, /¥350/, 'the fallback must not override fresh data');
+  assert.match(first, /## 🥗 Sides\s+·\s+¥90/);
+  assert.doesNotMatch(first, /## 🥗 Sides\s+·\s+¥70/, 'the fallback must not override fresh data');
 });
 
 test('nothing is invented for a slot that was never priced', () => {
@@ -63,18 +64,18 @@ test('nothing is invented for a slot that was never priced', () => {
     [
       dish({
         campus: 'Kameoka',
-        category: 'Live Kitchen',
-        subcategory: 'Live Kitchen',
-        dish_name: 'Chicken and Egg Bowl',
+        category: 'Side Dish',
+        subcategory: 'B',
+        dish_name: 'Cold Tofu',
         price: null,
       }),
     ],
     new Map(),
     'Kameoka',
-    new Map([['Curry|||A', 350]])
+    new Map([['Side Dish|||A', 70]])
   );
 
-  assert.doesNotMatch(first, /¥/, 'another slot\u2019s price is not this slot\u2019s price');
+  assert.match(first, /## 🥗 Sides\n/, 'another slot\u2019s price is not this slot\u2019s price');
 });
 
 test('callers that pass no fallback still render', () => {
@@ -92,14 +93,60 @@ test('header carries the campus, day and date', () => {
   assert.match(first, /^# Uzumasa Campus — Tuesday, 2026-08-18/);
 });
 
-test('renders the Kameoka header and its DB-sourced price', () => {
-  const [first] = formatMenuMessage(
+test('Kameoka renders updated category prices and includes standing Udon and Soba under Noodles with Ramen', () => {
+  const fullMessage = formatMenuMessage(
+    [
+      dish({ campus: 'Kameoka', category: 'Set', subcategory: 'A', dish_name: 'Pork Tonkatsu', price: 500 }),
+      dish({ campus: 'Kameoka', category: 'Set', subcategory: 'B', dish_name: 'Grilled Salmon', price: 500 }),
+      dish({ campus: 'Kameoka', category: 'Live Kitchen', subcategory: 'Live Kitchen', dish_name: 'Beef Bowl', price: 480 }),
+      dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: 350 }),
+      dish({ campus: 'Kameoka', category: 'Ramen', subcategory: 'Ramen', dish_name: 'Shoyu Ramen', price: 380 }),
+      dish({ campus: 'Kameoka', category: 'Side Dish', subcategory: 'A', dish_name: 'Spinach Salad', price: 70 }),
+    ],
+    new Map(),
+    'Kameoka'
+  ).join('\n');
+
+  assert.match(fullMessage, /^# Kameoka Campus/);
+  assert.match(fullMessage, /## 🍱 Set Meals\s+·\s+¥330/);
+  assert.match(fullMessage, /## 🍳 Live Kitchen\s+·\s+¥280/);
+  assert.match(fullMessage, /## 🍛 Curry\s+·\s+¥230/);
+  assert.match(fullMessage, /## 🍜 Noodles\n/);
+  assert.match(fullMessage, /\*\*— Ramen\s+·\s+¥230 —\*\*/);
+  assert.match(fullMessage, /\*\*— Udon and Soba\s+·\s+¥130 —\*\*/);
+  assert.match(fullMessage, /🍝 \*\*Wakame \(seaweed\) udon\*\*\n> ⚠️ \*Wheat\*/);
+  assert.match(fullMessage, /🍝 \*\*Wakame \(seaweed\) soba noodles\*\*\n> ⚠️ \*Eggs, Wheat, Soba\*/);
+  assert.match(fullMessage, /🍝 \*\*Kitsune \(fried tofu\) udon\*\*\n> ⚠️ \*Wheat\*/);
+  assert.match(fullMessage, /🍝 \*\*Kitsune \(fried tofu\) soba noodles\*\*\n> ⚠️ \*Eggs, Wheat, Soba\*/);
+  assert.match(fullMessage, /## 🥗 Sides\s+·\s+¥70/);
+});
+
+test('Kameoka shows Noodles · ¥130 when no Ramen is scraped that day and does not duplicate scraped Udon and Soba', () => {
+  const [withoutRamen] = formatMenuMessage(
     [dish({ campus: 'Kameoka', category: 'Curry', subcategory: 'A', dish_name: 'Original Curry', price: 350 })],
     new Map(),
     'Kameoka'
   );
-  assert.match(first, /^# Kameoka Campus/);
-  assert.match(first, /¥350/);
+  assert.match(withoutRamen, /## 🍜 Noodles\s+·\s+¥130/);
+  assert.match(withoutRamen, /\*\*— Udon and Soba —\*\*/);
+
+  // If the scraper already provides Udon and Soba rows, standing ones must not duplicate them.
+  const [withScrapedUdon] = formatMenuMessage(
+    [
+      dish({
+        campus: 'Kameoka',
+        category: 'Noodles',
+        subcategory: 'Udon and Soba',
+        dish_name: 'Wakame (seaweed) udon',
+        allergens: 'Wheat',
+        price: 130,
+      }),
+    ],
+    new Map(),
+    'Kameoka'
+  );
+  const matches = withScrapedUdon.match(/Wakame \(seaweed\) udon/g) || [];
+  assert.strictEqual(matches.length, 1);
 });
 
 test('an unknown campus falls back to Uzumasa rather than throwing', () => {

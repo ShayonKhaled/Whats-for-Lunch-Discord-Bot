@@ -116,15 +116,23 @@ const STUDENT_DISCOUNT = {
 /**
  * Categories charged a flat price that does not follow the discount tiers.
  *
- * Halal is ¥400 at the Uzumasa payment machine regardless of the campaign
- * (confirmed at the cafeteria itself). Deriving it would be fragile: halal does
- * not return until September, so nobody has seen what the PDF prints for it,
- * and if that turns out to be ¥400 rather than ¥500 a -100 tier would show
- * ¥300 and undercharge on the menu. A fixed price is immune to that.
+ * Uzumasa Halal is ¥400 at the payment machine regardless of the campaign
+ * (confirmed at the cafeteria itself).
+ *
+ * Kameoka main categories use fixed student prices confirmed at the cafeteria
+ * (Set A/B ¥330, Live Kitchen ¥280, Curry ¥230, Ramen ¥230, Udon & Soba ¥130).
+ * Side dishes remain untouched so their scraped/listed price passes through.
  */
 const FIXED_STUDENT_PRICES = {
   Uzumasa: {
     Halal: 400,
+  },
+  Kameoka: {
+    Set: 330,
+    'Live Kitchen': 280,
+    Curry: 230,
+    Ramen: 230,
+    Noodles: 130,
   },
 };
 

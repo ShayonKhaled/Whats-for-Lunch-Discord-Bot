@@ -469,15 +469,16 @@ test('the menu carries a price even when the scrape dropped it', async () => {
       kameokaRow('A', 'Original Curry'),
       kameokaRow('B', 'Cardamon Curry'),
       kameokaRow('C', 'Dry Curry with Ground Meat'),
-      menuItem({ campus: 'Kameoka', category: 'Ramen', subcategory: 'Ramen', dish_name: 'Soy Sauce Ramen', price: null }),
+      menuItem({ campus: 'Kameoka', category: 'Side Dish', subcategory: 'A', dish_name: 'Spinach Gomaae', price: null }),
     ],
-    lastKnownPrices: new Map([['Curry|||A', 350]]),
+    lastKnownPrices: new Map([['Side Dish|||A', 70]]),
   });
   const { client, sent } = makeClient();
 
   await publishMenu(client);
 
-  assert.match(sent[0].content, /¥350/, 'a priceless week must still show prices');
+  assert.match(sent[0].content, /¥230/, 'fixed Kameoka Curry price should render');
+  assert.match(sent[0].content, /¥70/, 'a priceless Side Dish slot must fall back to lastKnownPrices');
 });
 
 // ── Incomplete scrapes ───────────────────────────────────────────────────────
